@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
 import "./App.css"
-import type { Page, Condominio, Impianto, TimelineEvent, Documento } from "./types"
+import type { Page, Condominio, Impianto, TimelineEvent, Documento, Ticket } from "./types"
 import { getStatoScadenza, giorniAllaScadenza } from "./utils/scadenze"
 import { modules, impiantiDisponibili } from "./data/constants"
 import LoginPage from "./components/LoginPage"
@@ -34,6 +34,13 @@ function App() {
     tipo: "Nota",
     titolo: "",
     descrizione: "",
+  })
+  // Stato del nuovo ticket da creare
+  const [nuovoTicket, setNuovoTicket] = useState({
+    titolo: "",
+    descrizione: "",
+    stato: "Aperto",
+    priorita: "Media",
   })
   const [fileDocumento, setFileDocumento] = useState<File | null>(null)
   const [nuovoDocumento, setNuovoDocumento] = useState({
@@ -394,6 +401,65 @@ async function aggiungiEventoTimeline() {
     tipo: "Nota",
     titolo: "",
     descrizione: "",
+  })
+}
+
+// ===============================
+// TICKET: AGGIUNTA SEGNALAZIONE
+// ===============================
+
+// Aggiunge un nuovo ticket al condominio selezionato
+async function aggiungiTicket() {
+  // Controllo sicurezza: serve un condominio selezionato e un titolo
+  if (!selectedCondominio || !nuovoTicket.titolo) return
+
+  // Recupera i ticket già esistenti
+  const ticketAttuali = selectedCondominio.ticket ?? []
+
+  // Crea la nuova lista ticket
+  const ticketAggiornati: Ticket[] = [
+    {
+      id: Date.now(),
+      titolo: nuovoTicket.titolo,
+      descrizione: nuovoTicket.descrizione,
+      stato: nuovoTicket.stato as Ticket["stato"],
+      priorita: nuovoTicket.priorita as Ticket["priorita"],
+      data: new Date().toISOString(),
+    },
+    ...ticketAttuali,
+  ]
+
+  // Salva i ticket aggiornati su Supabase
+  const { error } = await supabase
+    .from("condomini")
+    .update({ ticket: ticketAggiornati })
+    .eq("id", selectedCondominio.id)
+
+  // Gestione errore database
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // Aggiorna il condominio selezionato nel frontend
+  const aggiornato = {
+    ...selectedCondominio,
+    ticket: ticketAggiornati,
+  }
+
+  setSelectedCondominio(aggiornato)
+
+  // Aggiorna anche la lista globale condomìni
+  setCondomini((prev) =>
+    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+  )
+
+  // Reset form ticket
+  setNuovoTicket({
+    titolo: "",
+    descrizione: "",
+    stato: "Aperto",
+    priorita: "Media",
   })
 }
 
@@ -1179,10 +1245,59 @@ const condominiFiltrati = condomini.filter((condominio) => {
 </div>
   </div>
 
-          <div className="detail-card">
-            <h2>Ticket</h2>
-            <p>Segnalazioni e interventi</p>
-          </div>
+          <div className="detail-card ticket-card">
+  <h2>Ticket</h2>
+  <p>Segnalazioni e interventi del condominio</p>
+
+  <div className="ticket-form">
+    <input
+      placeholder="Titolo segnalazione"
+      value={nuovoTicket.titolo}
+      onChange={(e) =>
+        setNuovoTicket({ ...nuovoTicket, titolo: e.target.value })
+      }
+    />
+
+    <textarea
+      placeholder="Descrizione problema o intervento"
+      value={nuovoTicket.descrizione}
+      onChange={(e) =>
+        setNuovoTicket({ ...nuovoTicket, descrizione: e.target.value })
+      }
+    />
+
+    <select
+      value={nuovoTicket.priorita}
+      onChange={(e) =>
+        setNuovoTicket({ ...nuovoTicket, priorita: e.target.value })
+      }
+    >
+      <option value="Bassa">Bassa</option>
+      <option value="Media">Media</option>
+      <option value="Alta">Alta</option>
+    </select>
+
+    <button onClick={aggiungiTicket}>
+      Aggiungi ticket
+    </button>
+  </div>
+
+  <div className="ticket-list">
+    {(selectedCondominio.ticket ?? []).map((ticket) => (
+      <div className={`ticket-row ${ticket.stato.toLowerCase().replace(" ", "-")}`} key={ticket.id}>
+        <span>{ticket.priorita}</span>
+
+        <div>
+          <strong>{ticket.titolo}</strong>
+          <p>{ticket.descrizione || "Nessuna descrizione"}</p>
+          <small>
+            {ticket.stato} · {new Date(ticket.data).toLocaleString("it-IT")}
+          </small>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
         </div>
       </section>
     </main>
