@@ -16,7 +16,7 @@ const items = [
   { id: "scadenze", label: "Scadenze" },
 ]
 
-export default function Sidebar({
+export default function sidebar({
   page,
   setPage,
   userEmail,
