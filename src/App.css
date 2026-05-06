@@ -720,3 +720,84 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+/* ===============================
+   TICKET: UI PROFESSIONALE
+================================ */
+
+.ticket-card {
+  max-width: 100%;
+}
+
+.ticket-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.ticket-form input,
+.ticket-form textarea,
+.ticket-form select {
+  width: 100%;
+}
+
+.ticket-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.ticket-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.ticket-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.ticket-row > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(249, 115, 22, 0.16);
+  color: #fed7aa;
+}
+
+.ticket-row strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.ticket-row p {
+  margin: 0 0 8px;
+  color: #cbd5e1;
+}
+
+.ticket-row small {
+  color: #94a3b8;
+}
+
+.ticket-row.aperto {
+  border-color: rgba(249, 115, 22, 0.4);
+}
+
+.ticket-row.in-lavorazione {
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.ticket-row.chiuso {
+  opacity: 0.75;
+}

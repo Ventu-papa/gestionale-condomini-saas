@@ -34,6 +34,7 @@ export type Condominio = {
   impianti?: Impianto[]
   timeline?: TimelineEvent[]
   documenti?: Documento[]
+  ticket?: Ticket[] 
 }
 
 export type Documento = {
@@ -44,4 +45,17 @@ export type Documento = {
   note: string
   file_path?: string
   file_name?: string
+}
+
+// ===============================
+// TICKET / SEGNALAZIONI
+// ===============================
+
+export type Ticket = {
+  id: number
+  titolo: string
+  descrizione: string
+  stato: "Aperto" | "In lavorazione" | "Chiuso"
+  priorita: "Bassa" | "Media" | "Alta"
+  data: string
 }
