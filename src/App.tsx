@@ -21,6 +21,8 @@ function App() {
   const [editingCondominioId, setEditingCondominioId] = useState<number | null>(null)
   const [editingImpiantoId, setEditingImpiantoId] = useState<number | null>(null)
   const [editingEventoId, setEditingEventoId] = useState<number | null>(null)
+  // Stato che indica quale documento è in modifica
+  const [editingDocumentoId, setEditingDocumentoId] = useState<number | null>(null) 
   const [selectedCondominio, setSelectedCondominio] = useState<Condominio | null>(null)
   const [nuovoImpianto, setNuovoImpianto] = useState({
     tipo: "",
@@ -310,6 +312,50 @@ async function aggiungiDocumento() {
   })
 
   setFileDocumento(null)
+}
+
+// ===============================
+// DOCUMENTI: MODIFICA DATI DOCUMENTO
+// ===============================
+
+// Modifica titolo, categoria, data e note di un documento
+async function modificaDocumento(documentoAggiornato: Documento) {
+  // Controllo sicurezza: serve un condominio selezionato
+  if (!selectedCondominio) return
+
+  // Crea una nuova lista documenti sostituendo solo quello modificato
+  const documentiAggiornati = (selectedCondominio.documenti ?? []).map(
+    (documento) =>
+      documento.id === documentoAggiornato.id ? documentoAggiornato : documento
+  )
+
+  // Salva la lista aggiornata su Supabase
+  const { error } = await supabase
+    .from("condomini")
+    .update({ documenti: documentiAggiornati })
+    .eq("id", selectedCondominio.id)
+
+  // Gestione errore database
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // Aggiorna il condominio selezionato nel frontend
+  const aggiornato = {
+    ...selectedCondominio,
+    documenti: documentiAggiornati,
+  }
+
+  setSelectedCondominio(aggiornato)
+
+  // Aggiorna anche la lista globale dei condomìni
+  setCondomini((prev) =>
+    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+  )
+
+  // Esce dalla modalità modifica
+  setEditingDocumentoId(null)
 }
 
 async function aggiungiEventoTimeline() {
@@ -854,39 +900,141 @@ const condominiFiltrati = condomini.filter((condominio) => {
   <div className="documenti-list">
   {(selectedCondominio.documenti ?? []).map((documento) => (
     <div className="documento-row" key={documento.id}>
-      <span>{documento.categoria}</span>
-
-      <div>
-        <strong>{documento.titolo}</strong>
-        <p>{documento.note || "Nessuna nota"}</p>
-        <small>{documento.data || "Data non indicata"}</small>
-
-        {documento.file_path ? (
-          <div className="document-actions">
-            <button
-              className="secondary small"
-              onClick={() => apriDocumento(documento.file_path!)}
-            >
-              Apri
-            </button>
-
-            <button
-              className="secondary small"
-              onClick={() =>
-                scaricaDocumento(documento.file_path!, documento.file_name)
+      {editingDocumentoId === documento.id ? (
+        <>
+          <select
+            value={documento.categoria}
+            onChange={(e) => {
+              const aggiornato = {
+                ...selectedCondominio,
+                documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                  doc.id === documento.id
+                    ? { ...doc, categoria: e.target.value }
+                    : doc
+                ),
               }
-            >
-              Scarica
-            </button>
-            <button
-            className="danger-button small"
-            onClick={() => eliminaDocumento(documento)}
+
+              setSelectedCondominio(aggiornato)
+            }}
           >
-            Elimina
-          </button>
+            <option value="Contratto">Contratto</option>
+            <option value="Verbale">Verbale</option>
+            <option value="Fattura">Fattura</option>
+            <option value="Rapportino">Rapportino</option>
+            <option value="Certificazione">Certificazione</option>
+            <option value="Altro">Altro</option>
+          </select>
+
+          <div>
+            <input
+              value={documento.titolo}
+              onChange={(e) => {
+                const aggiornato = {
+                  ...selectedCondominio,
+                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                    doc.id === documento.id
+                      ? { ...doc, titolo: e.target.value }
+                      : doc
+                  ),
+                }
+
+                setSelectedCondominio(aggiornato)
+              }}
+            />
+
+            <input
+              type="date"
+              value={documento.data}
+              onChange={(e) => {
+                const aggiornato = {
+                  ...selectedCondominio,
+                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                    doc.id === documento.id
+                      ? { ...doc, data: e.target.value }
+                      : doc
+                  ),
+                }
+
+                setSelectedCondominio(aggiornato)
+              }}
+            />
+
+            <textarea
+              value={documento.note}
+              onChange={(e) => {
+                const aggiornato = {
+                  ...selectedCondominio,
+                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                    doc.id === documento.id
+                      ? { ...doc, note: e.target.value }
+                      : doc
+                  ),
+                }
+
+                setSelectedCondominio(aggiornato)
+              }}
+            />
+
+            <button
+              className="secondary small"
+              onClick={() => modificaDocumento(documento)}
+            >
+              Salva
+            </button>
+
+            <button
+              className="danger-button small"
+              onClick={() => setEditingDocumentoId(null)}
+            >
+              Annulla
+            </button>
           </div>
-        ) : null}
-      </div>
+        </>
+      ) : (
+        <>
+          <span>{documento.categoria}</span>
+
+          <div>
+            <strong>{documento.titolo}</strong>
+            <p>{documento.note || "Nessuna nota"}</p>
+            <small>{documento.data || "Data non indicata"}</small>
+
+            {documento.file_path ? (
+              <div className="document-actions">
+                <button
+                  className="secondary small"
+                  onClick={() => apriDocumento(documento.file_path!)}
+                >
+                  Apri
+                </button>
+
+                <button
+                  className="secondary small"
+                  onClick={() =>
+                    scaricaDocumento(documento.file_path!, documento.file_name)
+                  }
+                >
+                  Scarica
+                </button>
+
+                <button
+                  className="secondary small"
+                  onClick={() => setEditingDocumentoId(documento.id)}
+                >
+                  Modifica
+                </button>
+
+                <button
+                  className="danger-button small"
+                  onClick={() => eliminaDocumento(documento)}
+                >
+                  Elimina
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   ))}
 </div>
