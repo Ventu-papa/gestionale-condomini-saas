@@ -1989,31 +1989,14 @@ if (page === "documenti") {
   }
 
 return (
-  <main className="app-shell">
-    <div className="premium-topbar">
-      <div>
-        <p className="topbar-eyebrow">Gestionale Studio Ventura</p>
-        <strong>Dashboard operativa</strong>
-      </div>
-
-      <div className="user-pill">
-        <span>{user?.email}</span>
-        <button
-          onClick={async () => {
-            await supabase.auth.signOut()
-            setUser(null)
-            setCondomini([])
-            setSelectedCondominio(null)
-            setPage("home")
-          }}
-        >
-          Esci
-        </button>
-      </div>
-    </div>
-
-    <Dashboard setPage={setPage} />
-  </main>
+  <Dashboard
+    setPage={setPage}
+    userEmail={user?.email}
+    ticketAperti={ticketGlobali.filter((t) => t.stato !== "Chiuso").length}
+    scadenzeUrgenti={
+      scadenzeGlobali.filter((s) => giorniAllaScadenza(s.data) <= 30).length
+    }
+  />
 )
 }
 

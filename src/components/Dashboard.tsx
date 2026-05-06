@@ -1,20 +1,60 @@
-// Componente dashboard principale dopo il login
-
 import type { Page } from "../types"
 import { modules } from "../data/constants"
+
 type DashboardProps = {
-  setPage: React.Dispatch<React.SetStateAction<Page>>
+  setPage: (page: Page) => void
+  userEmail?: string
+  ticketAperti: number
+  scadenzeUrgenti: number
 }
 
-function Dashboard({ setPage }: DashboardProps) {
+export default function Dashboard({
+  setPage,
+  userEmail,
+  ticketAperti,
+  scadenzeUrgenti,
+}: DashboardProps) {
   return (
     <main className="app-shell">
-      <section className="dashboard">
-        <div className="module-grid">
+      <section className="dashboard-premium">
+        {/* ===============================
+            HEADER PREMIUM DASHBOARD
+        =============================== */}
+        <header className="dashboard-header-pro">
+          <div className="brand-area">
+            <div className="brand-logo-pro">
+              <span>GV</span>
+            </div>
+
+            <div>
+              <p>Gestionale Studio Ventura</p>
+              <h1>Bentornato Pietro</h1>
+            </div>
+          </div>
+
+          <div className="header-right-pro">
+            <span>{userEmail}</span>
+
+            <div className="header-stats-pro">
+              <strong>{ticketAperti}</strong>
+              <small>ticket aperti</small>
+            </div>
+
+            <div className="header-stats-pro urgent">
+              <strong>{scadenzeUrgenti}</strong>
+              <small>scadenze urgenti</small>
+            </div>
+          </div>
+        </header>
+
+        {/* ===============================
+            CARD MODULI DASHBOARD
+        =============================== */}
+        <div className="dashboard-grid">
           {modules.map((module) => (
             <button
-              className="module-card"
-              key={module.title}
+              key={module.page}
+              className="dashboard-card"
               onClick={() => setPage(module.page)}
             >
               <span>{module.status}</span>
@@ -27,5 +67,3 @@ function Dashboard({ setPage }: DashboardProps) {
     </main>
   )
 }
-
-export default Dashboard
