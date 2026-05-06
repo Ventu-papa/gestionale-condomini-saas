@@ -42,20 +42,9 @@ function App() {
     data: "",
     note: "",
   })
-  const [condomini, setCondomini] = useState<Condominio[]>([
-    {
-      id: 1,
-      nome: "Condominio Via Roma 12",
-      indirizzo: "Via Roma 12",
-      comune: "Bologna",
-    },
-    {
-      id: 2,
-      nome: "Condominio Via Mazzini 45",
-      indirizzo: "Via Mazzini 45",
-      comune: "Bologna",
-    },
-  ])
+  // Lista condomìni caricata da Supabase.
+  // Deve partire vuota per evitare che utenti diversi vedano dati finti o dati di altri.
+  const [condomini, setCondomini] = useState<Condominio[]>([])
 
   const [form, setForm] = useState({
   nome: "",
@@ -87,31 +76,37 @@ function App() {
   // CARICAMENTO CONDOMINI DA SUPABASE
   // ===============================
 
-useEffect(() => {
-  async function caricaCondomini() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+// ===============================
+// CARICAMENTO CONDOMINI UTENTE
+// ===============================
 
-    if (!user) return
+  // Carica solo i condomìni dell'utente loggato.
+  // Quando cambia utente, svuota prima i dati vecchi.
+    useEffect(() => {
+      async function caricaCondominiUtente() {
+        if (!user) {
+          setCondomini([])
+          setSelectedCondominio(null)
+          return
+        }
 
-    const { data, error } = await supabase
-      .from("condomini")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
+        const { data, error } = await supabase
+          .from("condomini")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
 
-    if (!error && data) {
-      setCondomini(data)
-    }
-  }
+        if (error) {
+          alert(error.message)
+          return
+        }
 
-  caricaCondomini()
-}, [])
+        setCondomini(data ?? [])
+        setSelectedCondominio(null)
+      }
 
-useEffect(() => {
-  localStorage.setItem("condomini", JSON.stringify(condomini))
-}, [condomini])
+      caricaCondominiUtente()
+    }, [user])
 
   // ===============================
   // TIMELINE: AGGIUNTA / MODIFICA / ELIMINA EVENTI
@@ -999,8 +994,9 @@ const condominiFiltrati = condomini.filter((condominio) => {
             <p>{documento.note || "Nessuna nota"}</p>
             <small>{documento.data || "Data non indicata"}</small>
 
+            <div className="document-actions">
             {documento.file_path ? (
-              <div className="document-actions">
+              <>
                 <button
                   className="secondary small"
                   onClick={() => apriDocumento(documento.file_path!)}
@@ -1016,22 +1012,23 @@ const condominiFiltrati = condomini.filter((condominio) => {
                 >
                   Scarica
                 </button>
-
-                <button
-                  className="secondary small"
-                  onClick={() => setEditingDocumentoId(documento.id)}
-                >
-                  Modifica
-                </button>
-
-                <button
-                  className="danger-button small"
-                  onClick={() => eliminaDocumento(documento)}
-                >
-                  Elimina
-                </button>
-              </div>
+              </>
             ) : null}
+
+            <button
+              className="secondary small"
+              onClick={() => setEditingDocumentoId(documento.id)}
+            >
+              Modifica
+            </button>
+
+            <button
+              className="danger-button small"
+              onClick={() => eliminaDocumento(documento)}
+            >
+              Elimina
+            </button>
+          </div>
           </div>
         </>
       )}
