@@ -23,6 +23,8 @@ function App() {
   const [editingEventoId, setEditingEventoId] = useState<number | null>(null)
   // Stato che indica quale documento è in modifica
   const [editingDocumentoId, setEditingDocumentoId] = useState<number | null>(null) 
+  // Stato che indica quale ticket è in modifica
+  const [editingTicketId, setEditingTicketId] = useState<number | null>(null)
   const [selectedCondominio, setSelectedCondominio] = useState<Condominio | null>(null)
   const [nuovoImpianto, setNuovoImpianto] = useState({
     tipo: "",
@@ -461,6 +463,88 @@ async function aggiungiTicket() {
     stato: "Aperto",
     priorita: "Media",
   })
+}
+
+// ===============================
+// TICKET: MODIFICA SEGNALAZIONE
+// ===============================
+
+// Modifica titolo, descrizione, stato e priorità di un ticket
+async function modificaTicket(ticketAggiornato: Ticket) {
+  // Controllo sicurezza
+  if (!selectedCondominio) return
+
+  // Sostituisce solo il ticket modificato
+  const ticketAggiornati = (selectedCondominio.ticket ?? []).map((ticket) =>
+    ticket.id === ticketAggiornato.id ? ticketAggiornato : ticket
+  )
+
+  // Salva su Supabase
+  const { error } = await supabase
+    .from("condomini")
+    .update({ ticket: ticketAggiornati })
+    .eq("id", selectedCondominio.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // Aggiorna frontend
+  const aggiornato = {
+    ...selectedCondominio,
+    ticket: ticketAggiornati,
+  }
+
+  setSelectedCondominio(aggiornato)
+
+  setCondomini((prev) =>
+    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+  )
+
+  // Esce dalla modalità modifica
+  setEditingTicketId(null)
+}
+
+// ===============================
+// TICKET: ELIMINAZIONE SEGNALAZIONE
+// ===============================
+
+// Elimina un ticket dal condominio selezionato
+async function eliminaTicket(idTicket: number) {
+  // Controllo sicurezza
+  if (!selectedCondominio) return
+
+  const conferma = confirm("Vuoi eliminare questo ticket?")
+  if (!conferma) return
+
+  // Rimuove il ticket dalla lista
+  const ticketAggiornati = (selectedCondominio.ticket ?? []).filter(
+    (ticket) => ticket.id !== idTicket
+  )
+
+  // Salva su Supabase
+  const { error } = await supabase
+    .from("condomini")
+    .update({ ticket: ticketAggiornati })
+    .eq("id", selectedCondominio.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // Aggiorna frontend
+  const aggiornato = {
+    ...selectedCondominio,
+    ticket: ticketAggiornati,
+  }
+
+  setSelectedCondominio(aggiornato)
+
+  setCondomini((prev) =>
+    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+  )
 }
 
   // ===============================
@@ -1284,7 +1368,100 @@ const condominiFiltrati = condomini.filter((condominio) => {
 
   <div className="ticket-list">
     {(selectedCondominio.ticket ?? []).map((ticket) => (
-      <div className={`ticket-row ${ticket.stato.toLowerCase().replace(" ", "-")}`} key={ticket.id}>
+  <div
+    className={`ticket-row ${ticket.stato.toLowerCase().replace(" ", "-")}`}
+    key={ticket.id}
+  >
+    {editingTicketId === ticket.id ? (
+      <>
+        <select
+          value={ticket.priorita}
+          onChange={(e) => {
+            const aggiornato = {
+              ...selectedCondominio,
+              ticket: (selectedCondominio.ticket ?? []).map((t) =>
+                t.id === ticket.id
+                  ? { ...t, priorita: e.target.value as Ticket["priorita"] }
+                  : t
+              ),
+            }
+
+            setSelectedCondominio(aggiornato)
+          }}
+        >
+          <option value="Bassa">Bassa</option>
+          <option value="Media">Media</option>
+          <option value="Alta">Alta</option>
+        </select>
+
+        <div>
+          <input
+            value={ticket.titolo}
+            onChange={(e) => {
+              const aggiornato = {
+                ...selectedCondominio,
+                ticket: (selectedCondominio.ticket ?? []).map((t) =>
+                  t.id === ticket.id ? { ...t, titolo: e.target.value } : t
+                ),
+              }
+
+              setSelectedCondominio(aggiornato)
+            }}
+          />
+
+          <textarea
+            value={ticket.descrizione}
+            onChange={(e) => {
+              const aggiornato = {
+                ...selectedCondominio,
+                ticket: (selectedCondominio.ticket ?? []).map((t) =>
+                  t.id === ticket.id
+                    ? { ...t, descrizione: e.target.value }
+                    : t
+                ),
+              }
+
+              setSelectedCondominio(aggiornato)
+            }}
+          />
+
+          <select
+            value={ticket.stato}
+            onChange={(e) => {
+              const aggiornato = {
+                ...selectedCondominio,
+                ticket: (selectedCondominio.ticket ?? []).map((t) =>
+                  t.id === ticket.id
+                    ? { ...t, stato: e.target.value as Ticket["stato"] }
+                    : t
+                ),
+              }
+
+              setSelectedCondominio(aggiornato)
+            }}
+          >
+            <option value="Aperto">Aperto</option>
+            <option value="In lavorazione">In lavorazione</option>
+            <option value="Chiuso">Chiuso</option>
+          </select>
+
+          <button
+            className="secondary small"
+            onClick={() => modificaTicket(ticket)}
+          >
+            Salva
+          </button>
+
+          <button
+            className="danger-button small"
+            onClick={() => setEditingTicketId(null)}
+          >
+            Annulla
+          </button>
+        </div>
+      </>
+    ) : (
+      <>
         <span>{ticket.priorita}</span>
 
         <div>
@@ -1293,9 +1470,27 @@ const condominiFiltrati = condomini.filter((condominio) => {
           <small>
             {ticket.stato} · {new Date(ticket.data).toLocaleString("it-IT")}
           </small>
+
+          <div className="document-actions">
+            <button
+              className="secondary small"
+              onClick={() => setEditingTicketId(ticket.id)}
+            >
+              Modifica
+            </button>
+
+            <button
+              className="danger-button small"
+              onClick={() => eliminaTicket(ticket.id)}
+            >
+              Elimina
+            </button>
+          </div>
         </div>
-      </div>
-    ))}
+      </>
+    )}
+  </div>
+))}
   </div>
 </div>
         </div>
