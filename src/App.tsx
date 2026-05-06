@@ -859,6 +859,22 @@ const condominiFiltrati = condomini.filter((condominio) => {
   if (selectedCondominio) {
   return (
     <main className="app-shell">
+      <div className="top-user-bar">
+      <span>{user?.email}</span>
+
+      <button
+        className="secondary small"
+        onClick={async () => {
+          await supabase.auth.signOut()
+          setUser(null)
+          setCondomini([])
+          setSelectedCondominio(null)
+          setPage("home")
+        }}
+      >
+        Esci
+      </button>
+    </div>
       <section className="page-view">
         <button
           className="back-button"
@@ -1972,7 +1988,33 @@ if (page === "documenti") {
     )
   }
 
-  return <Dashboard setPage={setPage} />
+return (
+  <main className="app-shell">
+    <div className="premium-topbar">
+      <div>
+        <p className="topbar-eyebrow">Gestionale Studio Ventura</p>
+        <strong>Dashboard operativa</strong>
+      </div>
+
+      <div className="user-pill">
+        <span>{user?.email}</span>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut()
+            setUser(null)
+            setCondomini([])
+            setSelectedCondominio(null)
+            setPage("home")
+          }}
+        >
+          Esci
+        </button>
+      </div>
+    </div>
+
+    <Dashboard setPage={setPage} />
+  </main>
+)
 }
 
 export default App
