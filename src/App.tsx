@@ -815,6 +815,37 @@ const timelineGlobale = condomini
   })
   .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
 
+// ===============================
+// LISTA GLOBALE TICKET
+// ===============================
+
+// Unisce tutti i ticket di tutti i condomìni in una sola lista globale
+const ticketGlobali = condomini
+  .flatMap((condominio) =>
+    (condominio.ticket ?? []).map((ticket) => ({
+      ...ticket,
+      condominio: condominio.nome,
+      indirizzo: condominio.indirizzo,
+    }))
+  )
+  .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+
+// ===============================
+// LISTA GLOBALE DOCUMENTI
+// ===============================
+
+const documentiGlobali = condomini
+  .flatMap((condominio) =>
+    (condominio.documenti ?? []).map((documento) => ({
+      ...documento,
+      condominio: condominio.nome,
+      indirizzo: condominio.indirizzo,
+    }))
+  )
+  .sort((a, b) => {
+    return new Date(b.data || "").getTime() - new Date(a.data || "").getTime()
+  })
+
 const condominiFiltrati = condomini.filter((condominio) => {
   const testo = `${condominio.nome} ${condominio.indirizzo} ${condominio.comune}`.toLowerCase()
 
@@ -1043,147 +1074,156 @@ const condominiFiltrati = condomini.filter((condominio) => {
   </div>
 
   <div className="documenti-list">
-  {(selectedCondominio.documenti ?? []).map((documento) => (
-    <div className="documento-row" key={documento.id}>
-      {editingDocumentoId === documento.id ? (
-        <>
-          <select
-            value={documento.categoria}
-            onChange={(e) => {
-              const aggiornato = {
-                ...selectedCondominio,
-                documenti: (selectedCondominio.documenti ?? []).map((doc) =>
-                  doc.id === documento.id
-                    ? { ...doc, categoria: e.target.value }
-                    : doc
-                ),
-              }
-
-              setSelectedCondominio(aggiornato)
-            }}
-          >
-            <option value="Contratto">Contratto</option>
-            <option value="Verbale">Verbale</option>
-            <option value="Fattura">Fattura</option>
-            <option value="Rapportino">Rapportino</option>
-            <option value="Certificazione">Certificazione</option>
-            <option value="Altro">Altro</option>
-          </select>
-
-          <div>
-            <input
-              value={documento.titolo}
-              onChange={(e) => {
-                const aggiornato = {
-                  ...selectedCondominio,
-                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
-                    doc.id === documento.id
-                      ? { ...doc, titolo: e.target.value }
-                      : doc
-                  ),
-                }
-
-                setSelectedCondominio(aggiornato)
-              }}
-            />
-
-            <input
-              type="date"
-              value={documento.data}
-              onChange={(e) => {
-                const aggiornato = {
-                  ...selectedCondominio,
-                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
-                    doc.id === documento.id
-                      ? { ...doc, data: e.target.value }
-                      : doc
-                  ),
-                }
-
-                setSelectedCondominio(aggiornato)
-              }}
-            />
-
-            <textarea
-              value={documento.note}
-              onChange={(e) => {
-                const aggiornato = {
-                  ...selectedCondominio,
-                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
-                    doc.id === documento.id
-                      ? { ...doc, note: e.target.value }
-                      : doc
-                  ),
-                }
-
-                setSelectedCondominio(aggiornato)
-              }}
-            />
-
-            <button
-              className="secondary small"
-              onClick={() => modificaDocumento(documento)}
-            >
-              Salva
-            </button>
-
-            <button
-              className="danger-button small"
-              onClick={() => setEditingDocumentoId(null)}
-            >
-              Annulla
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <span>{documento.categoria}</span>
-
-          <div>
-            <strong>{documento.titolo}</strong>
-            <p>{documento.note || "Nessuna nota"}</p>
-            <small>{documento.data || "Data non indicata"}</small>
-
-            <div className="document-actions">
-            {documento.file_path ? (
-              <>
-                <button
-                  className="secondary small"
-                  onClick={() => apriDocumento(documento.file_path!)}
-                >
-                  Apri
-                </button>
-
-                <button
-                  className="secondary small"
-                  onClick={() =>
-                    scaricaDocumento(documento.file_path!, documento.file_name)
-                  }
-                >
-                  Scarica
-                </button>
-              </>
-            ) : null}
-
-            <button
-              className="secondary small"
-              onClick={() => setEditingDocumentoId(documento.id)}
-            >
-              Modifica
-            </button>
-
-            <button
-              className="danger-button small"
-              onClick={() => eliminaDocumento(documento)}
-            >
-              Elimina
-            </button>
-          </div>
-          </div>
-        </>
-      )}
+  {(selectedCondominio.documenti ?? []).length === 0 ? (
+    <div className="empty-state">
+      Nessun documento caricato per questo condominio.
     </div>
-  ))}
+  ) : (
+    (selectedCondominio.documenti ?? []).map((documento) => (
+      <div className="documento-row" key={documento.id}>
+        {editingDocumentoId === documento.id ? (
+          <>
+            <select
+              value={documento.categoria}
+              onChange={(e) => {
+                const aggiornato = {
+                  ...selectedCondominio,
+                  documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                    doc.id === documento.id
+                      ? { ...doc, categoria: e.target.value }
+                      : doc
+                  ),
+                }
+
+                setSelectedCondominio(aggiornato)
+              }}
+            >
+              <option value="Contratto">Contratto</option>
+              <option value="Verbale">Verbale</option>
+              <option value="Fattura">Fattura</option>
+              <option value="Rapportino">Rapportino</option>
+              <option value="Certificazione">Certificazione</option>
+              <option value="Altro">Altro</option>
+            </select>
+
+            <div>
+              <input
+                value={documento.titolo}
+                onChange={(e) => {
+                  const aggiornato = {
+                    ...selectedCondominio,
+                    documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                      doc.id === documento.id
+                        ? { ...doc, titolo: e.target.value }
+                        : doc
+                    ),
+                  }
+
+                  setSelectedCondominio(aggiornato)
+                }}
+              />
+
+              <input
+                type="date"
+                value={documento.data}
+                onChange={(e) => {
+                  const aggiornato = {
+                    ...selectedCondominio,
+                    documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                      doc.id === documento.id
+                        ? { ...doc, data: e.target.value }
+                        : doc
+                    ),
+                  }
+
+                  setSelectedCondominio(aggiornato)
+                }}
+              />
+
+              <textarea
+                value={documento.note}
+                onChange={(e) => {
+                  const aggiornato = {
+                    ...selectedCondominio,
+                    documenti: (selectedCondominio.documenti ?? []).map((doc) =>
+                      doc.id === documento.id
+                        ? { ...doc, note: e.target.value }
+                        : doc
+                    ),
+                  }
+
+                  setSelectedCondominio(aggiornato)
+                }}
+              />
+
+              <button
+                className="secondary small"
+                onClick={() => modificaDocumento(documento)}
+              >
+                Salva
+              </button>
+
+              <button
+                className="danger-button small"
+                onClick={() => setEditingDocumentoId(null)}
+              >
+                Annulla
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span>{documento.categoria}</span>
+
+            <div>
+              <strong>{documento.titolo}</strong>
+              <p>{documento.note || "Nessuna nota"}</p>
+              <small>{documento.data || "Data non indicata"}</small>
+
+              <div className="document-actions">
+                {documento.file_path ? (
+                  <>
+                    <button
+                      className="secondary small"
+                      onClick={() => apriDocumento(documento.file_path!)}
+                    >
+                      Apri
+                    </button>
+
+                    <button
+                      className="secondary small"
+                      onClick={() =>
+                        scaricaDocumento(
+                          documento.file_path!,
+                          documento.file_name
+                        )
+                      }
+                    >
+                      Scarica
+                    </button>
+                  </>
+                ) : null}
+
+                <button
+                  className="secondary small"
+                  onClick={() => setEditingDocumentoId(documento.id)}
+                >
+                  Modifica
+                </button>
+
+                <button
+                  className="danger-button small"
+                  onClick={() => eliminaDocumento(documento)}
+                >
+                  Elimina
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    ))
+  )}
 </div>
 </div>
 
@@ -1597,6 +1637,130 @@ if (page === "timelineGlobale") {
                     {evento.condominio} · {evento.indirizzo} ·{" "}
                     {new Date(evento.data).toLocaleString("it-IT")}
                   </small>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </main>
+  )
+}
+
+// ===============================
+// PAGINA TICKET GLOBALE
+// ===============================
+
+if (page === "ticket") {
+  return (
+    <main className="app-shell">
+      <section className="page-view">
+        <button className="back-button" onClick={() => setPage("home")}>
+          ← Torna alla dashboard
+        </button>
+
+        <p className="eyebrow">Modulo operativo</p>
+        <h1>Ticket</h1>
+        <p className="subtitle">
+          Vista globale di tutte le segnalazioni e interventi aperti nei condomìni.
+        </p>
+
+        <div className="ticket-list">
+          {ticketGlobali.length === 0 ? (
+            <div className="empty-state">
+              Nessun ticket presente.
+            </div>
+          ) : (
+            ticketGlobali.map((ticket) => (
+              <div
+                className={`ticket-row ${ticket.stato
+                  .toLowerCase()
+                  .replace(" ", "-")}`}
+                key={`${ticket.condominio}-${ticket.id}`}
+              >
+                <span>{ticket.priorita}</span>
+
+                <div>
+                  <strong>{ticket.titolo}</strong>
+                  <p>{ticket.descrizione || "Nessuna descrizione"}</p>
+                  <small>
+                    {ticket.stato} · {ticket.condominio} · {ticket.indirizzo} ·{" "}
+                    {new Date(ticket.data).toLocaleString("it-IT")}
+                  </small>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </main>
+  )
+}
+
+// ===============================
+// PAGINA DOCUMENTI GLOBALE
+// ===============================
+
+if (page === "documenti") {
+  return (
+    <main className="app-shell">
+      <section className="page-view">
+        <button className="back-button" onClick={() => setPage("home")}>
+          ← Torna alla dashboard
+        </button>
+
+        <p className="eyebrow">Archivio studio</p>
+        <h1>Documenti</h1>
+
+        <p className="subtitle">
+          Tutti i documenti caricati nei condomìni.
+        </p>
+
+        <div className="documenti-list">
+          {documentiGlobali.length === 0 ? (
+            <div className="empty-state">
+              Nessun documento presente.
+            </div>
+          ) : (
+            documentiGlobali.map((documento) => (
+              <div
+                className="documento-row"
+                key={`${documento.condominio}-${documento.id}`}
+              >
+                <span>{documento.categoria}</span>
+
+                <div>
+                  <strong>{documento.titolo}</strong>
+
+                  <p>{documento.note || "Nessuna nota"}</p>
+
+                  <small>
+                    {documento.condominio} · {documento.indirizzo} ·{" "}
+                    {documento.data || "Data non indicata"}
+                  </small>
+
+                  {documento.file_path ? (
+                    <div className="document-actions">
+                      <button
+                        className="secondary small"
+                        onClick={() => apriDocumento(documento.file_path!)}
+                      >
+                        Apri
+                      </button>
+
+                      <button
+                        className="secondary small"
+                        onClick={() =>
+                          scaricaDocumento(
+                            documento.file_path!,
+                            documento.file_name
+                          )
+                        }
+                      >
+                        Scarica
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))
