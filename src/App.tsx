@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import type { ReactNode } from "react"
 import { supabase } from "./supabase"
 import "./App.css"
 import type { Page, Condominio, Impianto, TimelineEvent, Documento, Ticket } from "./types"
@@ -6,6 +7,7 @@ import { getStatoScadenza, giorniAllaScadenza } from "./utils/scadenze"
 import { modules, impiantiDisponibili } from "./data/constants"
 import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
+import Sidebar from "./components/sidebar"
 
 function App() {
  
@@ -80,6 +82,34 @@ function App() {
     listener.subscription.unsubscribe()
   }
 }, [])
+
+// ===============================
+// LAYOUT SAAS GLOBALE
+// ===============================
+
+// Avvolge ogni pagina autenticata con sidebar + contenuto principale
+function renderSaasLayout(contenuto: ReactNode) {
+  return (
+    <main className="app-shell saas-layout">
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        userEmail={user?.email}
+        onLogout={async () => {
+          await supabase.auth.signOut()
+          setUser(null)
+          setCondomini([])
+          setSelectedCondominio(null)
+          setPage("home")
+        }}
+      />
+
+      <section className="saas-content">
+        {contenuto}
+      </section>
+    </main>
+  )
+}
   
   // ===============================
   // CARICAMENTO CONDOMINI DA SUPABASE
@@ -857,25 +887,8 @@ const condominiFiltrati = condomini.filter((condominio) => {
   // ===============================
 
   if (selectedCondominio) {
-  return (
-    <main className="app-shell">
-      <div className="top-user-bar">
-      <span>{user?.email}</span>
-
-      <button
-        className="secondary small"
-        onClick={async () => {
-          await supabase.auth.signOut()
-          setUser(null)
-          setCondomini([])
-          setSelectedCondominio(null)
-          setPage("home")
-        }}
-      >
-        Esci
-      </button>
-    </div>
-      <section className="page-view">
+  return renderSaasLayout(
+    <section className="page-view">
         <button
           className="back-button"
           onClick={() => setSelectedCondominio(null)}
@@ -1551,7 +1564,6 @@ const condominiFiltrati = condomini.filter((condominio) => {
 </div>
         </div>
       </section>
-    </main>
   )
 }
 
@@ -1560,13 +1572,8 @@ const condominiFiltrati = condomini.filter((condominio) => {
   // ===============================
 
 if (page === "scadenze") {
-  return (
-    <main className="app-shell">
-      <section className="page-view">
-        <button className="back-button" onClick={() => setPage("home")}>
-          ← Torna alla dashboard
-        </button>
-
+  return renderSaasLayout(
+    <section className="page-view">
         <p className="eyebrow">Modulo operativo</p>
         <h1>Scadenze</h1>
         <p className="subtitle">
@@ -1605,7 +1612,6 @@ if (page === "scadenze") {
           )}
         </div>
       </section>
-    </main>
   )
 }
 
@@ -1614,13 +1620,8 @@ if (page === "scadenze") {
 // ===============================
 
 if (page === "timelineGlobale") {
-  return (
-    <main className="app-shell">
-      <section className="page-view">
-        <button className="back-button" onClick={() => setPage("home")}>
-          ← Torna alla dashboard
-        </button>
-
+  return renderSaasLayout(
+    <section className="page-view">
         <p className="eyebrow">Memoria operativa</p>
         <h1>Timeline globale</h1>
         <p className="subtitle">
@@ -1658,8 +1659,7 @@ if (page === "timelineGlobale") {
             ))
           )}
         </div>
-      </section>
-    </main>
+      </section>    
   )
 }
 
@@ -1668,13 +1668,8 @@ if (page === "timelineGlobale") {
 // ===============================
 
 if (page === "ticket") {
-  return (
-    <main className="app-shell">
-      <section className="page-view">
-        <button className="back-button" onClick={() => setPage("home")}>
-          ← Torna alla dashboard
-        </button>
-
+  return renderSaasLayout(
+    <section className="page-view">
         <p className="eyebrow">Modulo operativo</p>
         <h1>Ticket</h1>
         <p className="subtitle">
@@ -1709,7 +1704,6 @@ if (page === "ticket") {
           )}
         </div>
       </section>
-    </main>
   )
 }
 
@@ -1718,13 +1712,8 @@ if (page === "ticket") {
 // ===============================
 
 if (page === "documenti") {
-  return (
-    <main className="app-shell">
-      <section className="page-view">
-        <button className="back-button" onClick={() => setPage("home")}>
-          ← Torna alla dashboard
-        </button>
-
+  return renderSaasLayout(
+    <section className="page-view">
         <p className="eyebrow">Archivio studio</p>
         <h1>Documenti</h1>
 
@@ -1783,7 +1772,6 @@ if (page === "documenti") {
           )}
         </div>
       </section>
-    </main>
   )
 }
 
@@ -1792,13 +1780,8 @@ if (page === "documenti") {
 // ===============================
 
   if (page === "condomini") {
-    return (
-      <main className="app-shell">
-        <section className="page-view">
-          <button className="back-button" onClick={() => setPage("home")}>
-            ← Torna alla dashboard
-          </button>
-
+    return renderSaasLayout(
+      <section className="page-view">
           <div className="condomini-header">
             <div>
               <p className="eyebrow">Modulo</p>
@@ -1965,18 +1948,12 @@ if (page === "documenti") {
             </div>
           )}
         </section>
-      </main>
     )
   }
 
   if (page !== "home") {
-    return (
-      <main className="app-shell">
-        <section className="page-view">
-          <button className="back-button" onClick={() => setPage("home")}>
-            ← Torna alla dashboard
-          </button>
-
+    return renderSaasLayout(
+      <section className="page-view">
           <p className="eyebrow">Modulo</p>
           <h1>{modules.find((module) => module.page === page)?.title}</h1>
           <p className="subtitle">
@@ -1984,11 +1961,15 @@ if (page === "documenti") {
             {modules.find((module) => module.page === page)?.title}.
           </p>
         </section>
-      </main>
     )
   }
 
-return (
+// ===============================
+// DASHBOARD CON LAYOUT SAAS
+// ===============================
+
+// Layout principale con sidebar laterale e contenuto dashboard
+return renderSaasLayout(
   <Dashboard
     setPage={setPage}
     userEmail={user?.email}

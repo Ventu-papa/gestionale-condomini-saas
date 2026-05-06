@@ -15,8 +15,7 @@ export default function Dashboard({
   scadenzeUrgenti,
 }: DashboardProps) {
   return (
-    <main className="app-shell">
-      <section className="dashboard-premium">
+  <section className="dashboard-premium">
         {/* ===============================
             HEADER PREMIUM DASHBOARD
         =============================== */}
@@ -64,6 +63,5 @@ export default function Dashboard({
           ))}
         </div>
       </section>
-    </main>
   )
 }
