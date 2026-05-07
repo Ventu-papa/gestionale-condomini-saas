@@ -25,6 +25,7 @@ function App() {
   const [ricercaGlobale, setRicercaGlobale] = useState("")
   const [page, setPage] = useState<Page>("home")
   const [showGestionaleModal, setShowGestionaleModal] = useState(false)
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
   const [gestionaleSelezionato, setGestionaleSelezionato] = useState("")
   const [apiKeyGestionale, setApiKeyGestionale] = useState("")
   const [anteprimaImport, setAnteprimaImport] = useState<any[]>([])
@@ -250,10 +251,21 @@ async function completaOnboarding() {
 function renderSaasLayout(contenuto: ReactNode) {
   return (
     <main className="app-shell saas-layout">
+      <button
+        className="mobile-menu-button"
+        onClick={() => setSidebarMobileOpen(true)}
+      >
+        ☰
+      </button>
       <Sidebar
         page={page}
-        setPage={setPage}
+        setPage={(nuovaPagina) => {
+          setPage(nuovaPagina)
+          setSidebarMobileOpen(false)
+        }}
         userEmail={user?.email}
+        mobileOpen={sidebarMobileOpen}
+        onCloseMobile={() => setSidebarMobileOpen(false)}
         onLogout={async () => {
           await supabase.auth.signOut()
           setUser(null)

@@ -5,6 +5,8 @@ type SidebarProps = {
   setPage: (page: Page) => void
   userEmail?: string
   onLogout: () => void
+  mobileOpen?: boolean
+  onCloseMobile?: () => void
 }
 
 const items = [
@@ -16,14 +18,22 @@ const items = [
   { id: "scadenze", label: "Scadenze" },
 ]
 
-export default function sidebar({
+export default function Sidebar({
   page,
   setPage,
   userEmail,
   onLogout,
+  mobileOpen,
+  onCloseMobile,
 }: SidebarProps) {
   return (
-    <aside className="sidebar">
+   <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
+    <button
+      className="sidebar-mobile-close"
+      onClick={onCloseMobile}
+    >
+      ×
+    </button>
       {/* ===============================
           BRAND SOFTWARE
       =============================== */}
