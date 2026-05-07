@@ -144,8 +144,11 @@ export default function OnboardingPage({
                         file Excel o CSV.
                     </p>
 
-                    <button className="premium-save-button">
-                        Continua con importazione Excel
+                    <button
+                      className="premium-save-button"
+                      onClick={() => onConnectGestionale("excel", "")}
+                    >
+                      Continua con Excel / CSV
                     </button>
                     </div>
                 )}

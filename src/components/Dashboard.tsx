@@ -47,6 +47,7 @@ type DashboardProps = {
   risultatiRicercaGlobale: RisultatoRicercaDashboard[]
   notificheOperative: NotificaDashboard[]
   onSyncDanea: () => void
+  onOpenGestionaleModal: () => void
 }
 
 function giorniAllaScadenzaDashboard(data: string) {
@@ -74,6 +75,7 @@ export default function Dashboard({
   risultatiRicercaGlobale,
   notificheOperative,
   onSyncDanea,
+  onOpenGestionaleModal,
 }: DashboardProps) {
   return (
     <section className="dashboard-premium">
@@ -115,17 +117,25 @@ export default function Dashboard({
       </section>
 
       <section className="integration-panel">
-        <div>
-          <span>Integrazioni</span>
-          <h2>Danea Domustudio</h2>
-          <p>
-            Verifica il collegamento con Danea e prepara la sincronizzazione dei dati.
-          </p>
-        </div>
+        <div className="dashboard-card integration-card">
+          <div>
+            <span className="eyebrow">Integrazioni</span>
 
-        <button onClick={onSyncDanea}>
-          Sincronizza Danea
-        </button>
+            <h2>Gestionale principale</h2>
+
+            <p>
+              Collega Danea, TeamSystem o Zucchetti per sincronizzare condomìni,
+              anagrafiche e documenti.
+            </p>
+          </div>
+
+          <button
+            className="premium-save-button integration-button"
+            onClick={onOpenGestionaleModal}
+          >
+            Configura gestionale
+          </button> 
+        </div>
       </section> 
 
       <div className="analytics-grid">

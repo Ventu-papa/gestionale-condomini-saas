@@ -1858,3 +1858,10 @@ option {
     grid-template-columns: 1fr;
   }
 }
+.integration-card {
+  width: 100%;
+}
+
+.integration-button {
+  width: 100%;
+}

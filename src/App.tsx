@@ -8,6 +8,7 @@ import { modules, impiantiDisponibili } from "./data/constants"
 import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
 import Sidebar from "./components/sidebar"
+
 import * as XLSX from "xlsx"
 import OnboardingPage from "./components/onboarding-page"
 
@@ -23,6 +24,9 @@ function App() {
   // Ricerca globale usata nella dashboard
   const [ricercaGlobale, setRicercaGlobale] = useState("")
   const [page, setPage] = useState<Page>("home")
+  const [showGestionaleModal, setShowGestionaleModal] = useState(false)
+  const [gestionaleSelezionato, setGestionaleSelezionato] = useState("")
+  const [apiKeyGestionale, setApiKeyGestionale] = useState("")
   const [anteprimaImport, setAnteprimaImport] = useState<any[]>([])
   const [erroriImport, setErroriImport] = useState<any[]>([])
   const [importInCorso, setImportInCorso] = useState(false)
@@ -262,6 +266,82 @@ function renderSaasLayout(contenuto: ReactNode) {
       <section className="saas-content">
         {contenuto}
       </section>
+
+      {showGestionaleModal && (
+        <div className="premium-modal">
+          <div className="premium-modal-card">
+            <div className="modal-header">
+              <h2>Collega gestionale</h2>
+
+              <button
+                className="icon-button"
+                onClick={() => setShowGestionaleModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="gestionali-grid">
+              <div
+                className={`gestionale-card ${
+                  gestionaleSelezionato === "danea" ? "active" : ""
+                }`}
+                onClick={() => setGestionaleSelezionato("danea")}
+              >
+                <strong>Danea Domustudio</strong>
+                <p>Import e sincronizzazione automatica</p>
+              </div>
+
+              <div
+                className={`gestionale-card ${
+                  gestionaleSelezionato === "teamsystem" ? "active" : ""
+                }`}
+                onClick={() => setGestionaleSelezionato("teamsystem")}
+              >
+                <strong>TeamSystem</strong>
+                <p>Gestione professionale enterprise</p>
+              </div>
+
+              <div
+                className={`gestionale-card ${
+                  gestionaleSelezionato === "zucchetti" ? "active" : ""
+                }`}
+                onClick={() => setGestionaleSelezionato("zucchetti")}
+              >
+                <strong>Zucchetti</strong>
+                <p>Sincronizzazione studi strutturati</p>
+              </div>
+            </div>
+
+            {gestionaleSelezionato && (
+              <div className="gestionale-config-section">
+                <h3>Configurazione</h3>
+
+                <input
+                  className="onboarding-input"
+                  placeholder="Inserisci API Key"
+                  value={apiKeyGestionale}
+                  onChange={(e) => setApiKeyGestionale(e.target.value)}
+                />
+
+                <button
+                  className="premium-save-button"
+                  onClick={async () => {
+                    await salvaCollegamentoGestionale(
+                      gestionaleSelezionato,
+                      apiKeyGestionale
+                    )
+
+                    setShowGestionaleModal(false)
+                  }}
+                >
+                  Collega gestionale
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   )
 }
@@ -807,32 +887,50 @@ async function aggiungiImpianto() {
   })
 }
 
-  async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
-    if (!user) return
+  // ===============================
+// SALVA GESTIONALE PRINCIPALE
+// ===============================
+// Ogni studio può avere un solo gestionale principale attivo:
+// Danea, TeamSystem, Zucchetti oppure Excel/manuale.
+async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
+  if (!user) return
 
-    const { error } = await supabase
-      .from("gestionale_connections")
-      .upsert(
-        {
-          user_id: user.id,
-          provider,
-          api_key: apiKey,
-          connection_mode: "api",
-          status: apiKey ? "connected" : "not_connected",
-          last_sync_at: null,
-        },
-        {
-          onConflict: "user_id,provider",
-        }
-      )
+  // Prima disattiva eventuali gestionali già impostati come principali
+  const { error: resetError } = await supabase
+    .from("gestionale_connections")
+    .update({ is_primary: false })
+    .eq("user_id", user.id)
 
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    alert("Gestionale collegato correttamente.")
+  if (resetError) {
+    alert(resetError.message)
+    return
   }
+
+  // Poi salva o aggiorna il gestionale scelto come principale
+  const { error } = await supabase
+    .from("gestionale_connections")
+    .upsert(
+      {
+        user_id: user.id,
+        provider,
+        api_key: apiKey,
+        connection_mode: provider === "excel" ? "file" : "api",
+        status: apiKey || provider === "excel" ? "connected" : "not_connected",
+        is_primary: true,
+        last_sync_at: null,
+      },
+      {
+        onConflict: "user_id,provider",
+      }
+    )
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  alert("Gestionale principale salvato correttamente.")
+}
 
   // ===============================
   // CONDOMINI: CREA / MODIFICA / ELIMINA
@@ -2471,7 +2569,6 @@ if (page === "documenti") {
               </div>
             ))}
           </div>
-
           {showImportReport && (
             <div className="premium-modal">
               <div className="premium-import-report">
@@ -2682,6 +2779,7 @@ return renderSaasLayout(
   risultatiRicercaGlobale={risultatiRicercaGlobale}
   notificheOperative={notificheOperative}
   onSyncDanea={sincronizzaDanea}
+  onOpenGestionaleModal={() => setShowGestionaleModal(true)}
 />
 )
 }
