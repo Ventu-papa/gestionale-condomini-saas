@@ -128,28 +128,47 @@ useEffect(() => {
 // ===============================
 
 async function sincronizzaDanea() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-  if (!session) {
-    alert("Sessione non valida")
-    return
-  }
-
-  const response = await fetch(
-    "https://weqgdvmcoxftsjdhjgbc.supabase.co/functions/v1/sync-danea",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
+    if (!session) {
+      alert("Sessione non valida")
+      return
     }
-  )
 
-  const data = await response.json()
+    const response = await fetch(
+      "https://weqgdvmcoxftsjdhjgbc.supabase.co/functions/v1/sync-danea",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    )
 
-  alert(data?.message ?? "Risposta ricevuta dalla funzione")
+    const text = await response.text()
+
+    if (!response.ok) {
+      alert(`Errore funzione: ${response.status} - ${text}`)
+      return
+    }
+
+    try {
+      const data = JSON.parse(text)
+      alert(data?.message ?? "Risposta ricevuta dalla funzione")
+    } catch {
+      alert(text || "Risposta ricevuta dalla funzione")
+    }
+  } catch (error) {
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Errore sconosciuto durante la sincronizzazione"
+    )
+  }
 }
 
 // ===============================
