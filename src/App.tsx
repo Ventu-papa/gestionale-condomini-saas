@@ -14,10 +14,11 @@ function App() {
   // ===============================
   // STATI PRINCIPALI APP
   // ===============================
-
   const [user, setUser] = useState<any>(null)
   const [ricercaTimeline, setRicercaTimeline] = useState("")
   const [ricercaCondomini, setRicercaCondomini] = useState("")
+  // Ricerca globale usata nella dashboard
+  const [ricercaGlobale, setRicercaGlobale] = useState("")
   const [page, setPage] = useState<Page>("home")
   const [showModal, setShowModal] = useState(false)
   const [editingCondominioId, setEditingCondominioId] = useState<number | null>(null)
@@ -881,6 +882,84 @@ const condominiFiltrati = condomini.filter((condominio) => {
 
   return testo.includes(ricercaCondomini.toLowerCase())
 })
+
+// ===============================
+// ATTIVITÀ RECENTI DASHBOARD
+// ===============================
+
+// Crea un feed unico con ticket, documenti e timeline
+const attivitaRecenti = [
+  ...ticketGlobali.map((ticket) => ({
+    id: `ticket-${ticket.condominio}-${ticket.id}`,
+    tipo: "Ticket",
+    titolo: ticket.titolo,
+    descrizione: ticket.descrizione,
+    condominio: ticket.condominio,
+    data: ticket.data,
+  })),
+
+  ...documentiGlobali.map((documento) => ({
+    id: `documento-${documento.condominio}-${documento.id}`,
+    tipo: "Documento",
+    titolo: documento.titolo,
+    descrizione: documento.categoria,
+    condominio: documento.condominio,
+    data: documento.data || "",
+  })),
+
+  ...timelineGlobale.map((evento) => ({
+    id: `timeline-${evento.condominio}-${evento.id}`,
+    tipo: evento.tipo,
+    titolo: evento.titolo,
+    descrizione: evento.descrizione,
+    condominio: evento.condominio,
+    data: evento.data,
+  })),
+]
+  .filter((attivita) => attivita.data)
+  .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+  .slice(0, 6)
+
+  // ===============================
+// RICERCA GLOBALE DASHBOARD
+// ===============================
+
+// Cerca contemporaneamente in condomìni, ticket, documenti e timeline
+const risultatiRicercaGlobale = ricercaGlobale.trim()
+  ? [
+      ...condomini.map((condominio) => ({
+        id: `condominio-${condominio.id}`,
+        tipo: "Condominio",
+        titolo: condominio.nome,
+        descrizione: `${condominio.indirizzo} · ${condominio.comune}`,
+      })),
+
+      ...ticketGlobali.map((ticket) => ({
+        id: `ticket-${ticket.condominio}-${ticket.id}`,
+        tipo: "Ticket",
+        titolo: ticket.titolo,
+        descrizione: `${ticket.condominio} · ${ticket.stato} · ${ticket.priorita}`,
+      })),
+
+      ...documentiGlobali.map((documento) => ({
+        id: `documento-${documento.condominio}-${documento.id}`,
+        tipo: "Documento",
+        titolo: documento.titolo,
+        descrizione: `${documento.condominio} · ${documento.categoria}`,
+      })),
+
+      ...timelineGlobale.map((evento) => ({
+        id: `timeline-${evento.condominio}-${evento.id}`,
+        tipo: evento.tipo,
+        titolo: evento.titolo,
+        descrizione: `${evento.condominio} · ${evento.descrizione}`,
+      })),
+    ].filter((risultato) => {
+      const testo = `${risultato.tipo} ${risultato.titolo} ${risultato.descrizione}`.toLowerCase()
+
+      return testo.includes(ricercaGlobale.toLowerCase())
+    })
+  : []
 
   // ===============================
   // PAGINA DETTAGLIO CONDOMINIO
@@ -1971,13 +2050,20 @@ if (page === "documenti") {
 // Layout principale con sidebar laterale e contenuto dashboard
 return renderSaasLayout(
   <Dashboard
-    setPage={setPage}
-    userEmail={user?.email}
-    ticketAperti={ticketGlobali.filter((t) => t.stato !== "Chiuso").length}
-    scadenzeUrgenti={
-      scadenzeGlobali.filter((s) => giorniAllaScadenza(s.data) <= 30).length
-    }
-  />
+  setPage={setPage}
+  ticketAperti={ticketGlobali.filter((t) => t.stato !== "Chiuso").length}
+  scadenzeUrgenti={
+    scadenzeGlobali.filter((s) => giorniAllaScadenza(s.data) <= 30).length
+  }
+  condominiTotali={condomini.length}
+  documentiTotali={documentiGlobali.length}
+  scadenzeTotali={scadenzeGlobali.length}
+  scadenzeProssime={scadenzeGlobali.slice(0, 5)}
+  attivitaRecenti={attivitaRecenti}
+  ricercaGlobale={ricercaGlobale}
+  setRicercaGlobale={setRicercaGlobale}
+  risultatiRicercaGlobale={risultatiRicercaGlobale}
+/>
 )
 }
 

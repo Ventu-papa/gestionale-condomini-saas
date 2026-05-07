@@ -184,7 +184,7 @@ option {
 
 .dashboard-premium {
   min-height: 100vh;
-  padding: 42px 5vw 80px;
+  padding: 26px 5vw 80px;
 }
 
 .dashboard-header-pro {
@@ -1016,4 +1016,292 @@ option {
 
 .saas-content {
   overflow-x: hidden;
+}
+/* ===============================
+   DASHBOARD ANALYTICS
+================================ */
+
+.analytics-grid {
+  max-width: 1400px;
+  margin: 34px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.analytics-card {
+  text-align: left;
+  padding: 24px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.72));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.2);
+}
+
+.analytics-card span {
+  color: #fb923c;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.analytics-card strong {
+  display: block;
+  margin: 18px 0 8px;
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.analytics-card p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.dashboard-operational-grid {
+  max-width: 1400px;
+  margin: 24px auto 0;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+}
+
+.dashboard-panel {
+  padding: 28px;
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.76), rgba(15, 23, 42, 0.7));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.22);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.panel-header span {
+  color: #fb923c;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.panel-header h2 {
+  margin: 6px 0 0;
+  font-size: 26px;
+}
+
+.dashboard-deadlines {
+  display: grid;
+  gap: 12px;
+}
+
+.deadline-mini-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.deadline-mini-row p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+}
+
+.deadline-mini-row span {
+  color: #cbd5e1;
+  font-weight: 800;
+}
+
+.deadline-mini-row small {
+  display: block;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.urgent-days {
+  color: #fb923c;
+}
+
+.studio-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-summary div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.studio-summary span {
+  color: #94a3b8;
+}
+
+.studio-summary strong {
+  font-size: 24px;
+}
+
+@media (max-width: 1100px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-operational-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deadline-mini-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* ===============================
+   DASHBOARD ACTIVITY FEED
+================================ */
+
+.activity-panel {
+  grid-column: span 2;
+}
+
+.activity-feed {
+  display: grid;
+  gap: 12px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.activity-row > span {
+  color: #fb923c;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.activity-row strong {
+  color: #f8fafc;
+}
+
+.activity-row p {
+  margin: 4px 0 6px;
+  color: #cbd5e1;
+}
+
+.activity-row small {
+  color: #94a3b8;
+}
+
+@media (max-width: 950px) {
+  .activity-panel {
+    grid-column: span 1;
+  }
+
+  .activity-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* ===============================
+   GLOBAL SEARCH DASHBOARD
+================================ */
+
+.global-search-panel {
+  max-width: 1400px;
+  margin: 0 auto 28px;
+  padding: 28px;
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.76), rgba(15, 23, 42, 0.7));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.22);
+}
+
+.global-search-panel > div:first-child span {
+  color: #fb923c;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.global-search-panel h2 {
+  margin: 6px 0 8px;
+  font-size: 28px;
+}
+
+.global-search-panel p {
+  margin: 0 0 20px;
+  color: #94a3b8;
+}
+
+.global-search-panel input {
+  font-size: 16px;
+  padding: 16px 18px;
+}
+
+.global-search-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.global-search-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.global-search-row > span {
+  color: #fb923c;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.global-search-row strong {
+  color: #f8fafc;
+}
+
+.global-search-row p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+}
+
+@media (max-width: 650px) {
+  .global-search-row {
+    grid-template-columns: 1fr;
+  }
 }
