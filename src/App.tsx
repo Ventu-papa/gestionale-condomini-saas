@@ -127,7 +127,6 @@ useEffect(() => {
 // DANEA: TEST SINCRONIZZAZIONE
 // ===============================
 
-// Chiama la Edge Function sync-danea per verificare se Danea è collegato
 async function sincronizzaDanea() {
   const {
     data: { session },
@@ -138,18 +137,19 @@ async function sincronizzaDanea() {
     return
   }
 
-  const { data, error } = await supabase.functions.invoke("sync-danea", {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  })
+  const response = await fetch(
+    "https://weqgdvmcoxftsjdhjgbc.supabase.co/functions/v1/sync-danea",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  )
 
-  if (error) {
-    alert(error.message)
-    return
-  }
+  const data = await response.json()
 
-  alert(data?.message ?? "Sincronizzazione completata")
+  alert(data?.message ?? "Risposta ricevuta dalla funzione")
 }
 
 // ===============================
