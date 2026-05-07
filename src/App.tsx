@@ -8,6 +8,8 @@ import { modules, impiantiDisponibili } from "./data/constants"
 import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
 import Sidebar from "./components/sidebar"
+import * as XLSX from "xlsx"
+import OnboardingPage from "./components/OnBoardingPage"
 
 function App() {
  
@@ -29,6 +31,8 @@ function App() {
   // Stato che indica quale ticket è in modifica
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null)
   const [selectedCondominio, setSelectedCondominio] = useState<Condominio | null>(null)
+  const [onboardingCompletato, setOnboardingCompletato] = useState(false)
+  const [caricamentoOnboarding, setCaricamentoOnboarding] = useState(true)
   const [nuovoImpianto, setNuovoImpianto] = useState({
     tipo: "",
     nome: "",
@@ -62,6 +66,7 @@ function App() {
   nome: "",
   indirizzo: "",
   comune: "",
+  email_notifiche: "",
   email: "",
   password: "",
 })
@@ -83,6 +88,117 @@ function App() {
     listener.subscription.unsubscribe()
   }
 }, [])
+
+// ===============================
+// CARICAMENTO CONFIGURAZIONE STUDIO
+// ===============================
+
+// Controlla se l'utente ha già completato l'onboarding iniziale
+useEffect(() => {
+  async function caricaStudioSettings() {
+    if (!user) {
+      setOnboardingCompletato(false)
+      setCaricamentoOnboarding(false)
+      return
+    }
+
+    setCaricamentoOnboarding(true)
+
+    const { data, error } = await supabase
+      .from("studio_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single()
+
+    if (error && error.code !== "PGRST116") {
+      alert(error.message)
+      setCaricamentoOnboarding(false)
+      return
+    }
+
+    setOnboardingCompletato(data?.onboarding_completed ?? false)
+    setCaricamentoOnboarding(false)
+  }
+
+  caricaStudioSettings()
+}, [user])
+
+// ===============================
+// DANEA: TEST SINCRONIZZAZIONE
+// ===============================
+
+// Chiama la Edge Function sync-danea per verificare se Danea è collegato
+async function sincronizzaDanea() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    alert("Sessione non valida")
+    return
+  }
+
+  const { data, error } = await supabase.functions.invoke("sync-danea", {
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  })
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  alert(data?.message ?? "Sincronizzazione completata")
+}
+
+// ===============================
+// DAREA: COLLEGAMENTO GESTIONALE
+// ===============================
+
+// Salva API key Danea e abilita integrazione
+async function collegaDanea(apiKey: string) {
+  if (!user || !apiKey) return
+
+  const { error } = await supabase
+    .from("studio_settings")
+    .upsert({
+      user_id: user.id,
+      danea_enabled: true,
+      danea_api_key: apiKey,
+      onboarding_completed: true,
+    })
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setOnboardingCompletato(true)
+}
+
+// ===============================
+// ONBOARDING: COMPLETAMENTO
+// ===============================
+
+// Salva su Supabase che l'utente ha completato la configurazione iniziale
+async function completaOnboarding() {
+  if (!user) return
+
+  const { error } = await supabase
+    .from("studio_settings")
+    .upsert({
+      user_id: user.id,
+      onboarding_completed: true,
+    })
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setOnboardingCompletato(true)
+}
 
 // ===============================
 // LAYOUT SAAS GLOBALE
@@ -753,6 +869,59 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
   setCondomini((prev) => prev.filter((c) => c.id !== id))
 }
 
+// ===============================
+// IMPORT EXCEL / CSV CONDOMINI
+// ===============================
+
+// Legge un file Excel/CSV e crea automaticamente i condomìni
+async function importaCondominiDaExcel(file: File) {
+  if (!user) return
+
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer)
+
+  const primoFoglio = workbook.SheetNames[0]
+  const worksheet = workbook.Sheets[primoFoglio]
+
+  const righe = XLSX.utils.sheet_to_json<any>(worksheet)
+
+  const condominiDaInserire = righe
+    .map((riga) => ({
+      nome: riga.nome || riga.Nome || riga.condominio || riga.Condominio || "",
+      indirizzo: riga.indirizzo || riga.Indirizzo || "",
+      comune: riga.comune || riga.Comune || "",
+      email_notifiche:
+        riga.email_notifiche ||
+        riga.Email_notifiche ||
+        riga.email ||
+        riga.Email ||
+        "",
+      user_id: user.id,
+    }))
+    .filter((condominio) => condominio.nome && condominio.indirizzo && condominio.comune)
+
+  if (condominiDaInserire.length === 0) {
+    alert("Nessun condominio valido trovato nel file.")
+    return
+  }
+
+  const { data, error } = await supabase
+    .from("condomini")
+    .insert(condominiDaInserire)
+    .select()
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  if (data) {
+    setCondomini((prev) => [...data, ...prev])
+  }
+
+  alert(`${condominiDaInserire.length} condomìni importati correttamente.`)
+}
+
   async function creaCondominio() {
   if (!form.nome || !form.indirizzo || !form.comune) return
 
@@ -767,6 +936,7 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
         nome: form.nome,
         indirizzo: form.indirizzo,
         comune: form.comune,
+        email_notifiche: form.email_notifiche,
         user_id: user?.id,
       },
     ])
@@ -785,6 +955,7 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
     nome: "",
     indirizzo: "",
     comune: "",
+    email_notifiche: "",
     email: form.email,
     password: form.password,
   })
@@ -793,6 +964,30 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
 }
   if (!user) {
   return <LoginPage form={form} setForm={setForm} />
+}
+
+if (caricamentoOnboarding) {
+  return (
+    <main className="onboarding-page">
+      <section className="onboarding-card">
+        <p className="eyebrow">Caricamento</p>
+        <h1>Preparazione studio...</h1>
+      </section>
+    </main>
+  )
+}
+
+if (!onboardingCompletato) {
+  return (
+  <OnboardingPage
+  onComplete={completaOnboarding}
+  onConnectDanea={collegaDanea}
+  onImportExcel={async (file) => {
+    await importaCondominiDaExcel(file)
+    await completaOnboarding()
+  }}
+/>
+)
 }
 
   // ===============================
@@ -960,6 +1155,37 @@ const risultatiRicercaGlobale = ricercaGlobale.trim()
       return testo.includes(ricercaGlobale.toLowerCase())
     })
   : []
+
+  // ===============================
+// NOTIFICHE OPERATIVE
+// ===============================
+
+const notificheOperative = [
+  ...scadenzeGlobali
+    .filter((s) => giorniAllaScadenza(s.data) <= 30)
+    .map((s) => ({
+      id: `scadenza-${s.id}`,
+      tipo: "Scadenza urgente",
+      titolo: `${s.impianto} · ${s.condominio}`,
+      descrizione: `${s.tipo} in scadenza il ${s.data}`,
+      livello: "urgente",
+    })),
+
+  ...ticketGlobali
+    .filter(
+      (t) =>
+        t.priorita === "Alta" &&
+        t.stato !== "Chiuso"
+    )
+    .map((t) => ({
+      id: `ticket-${t.id}`,
+      tipo: "Ticket prioritario",
+      titolo: t.titolo,
+      descrizione: `${t.condominio} · ${t.stato}`,
+      livello: "warning",
+    })),
+].slice(0, 8)
+
 
   // ===============================
   // PAGINA DETTAGLIO CONDOMINIO
@@ -1931,7 +2157,6 @@ if (page === "documenti") {
                         )
                       }
                     />
-
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -2020,6 +2245,18 @@ if (page === "documenti") {
                   />
                 </label>
 
+                <label>
+                  Email notifiche
+                  <input
+                    type="email"
+                    value={form.email_notifiche}
+                    onChange={(e) =>
+                      setForm({ ...form, email_notifiche: e.target.value })
+                    }
+                    placeholder="Es. studio@email.it"
+                  />
+                </label>
+
                 <button className="full-button" onClick={creaCondominio}>
                   Salva condominio
                 </button>
@@ -2063,6 +2300,8 @@ return renderSaasLayout(
   ricercaGlobale={ricercaGlobale}
   setRicercaGlobale={setRicercaGlobale}
   risultatiRicercaGlobale={risultatiRicercaGlobale}
+  notificheOperative={notificheOperative}
+  onSyncDanea={sincronizzaDanea}
 />
 )
 }

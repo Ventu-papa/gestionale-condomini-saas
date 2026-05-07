@@ -25,6 +25,14 @@ type RisultatoRicercaDashboard = {
   descrizione: string
 }
 
+type NotificaDashboard = {
+  id: string
+  tipo: string
+  titolo: string
+  descrizione: string
+  livello: string
+}
+
 type DashboardProps = {
   setPage: (page: Page) => void
   ticketAperti: number
@@ -37,6 +45,8 @@ type DashboardProps = {
   ricercaGlobale: string
   setRicercaGlobale: (value: string) => void
   risultatiRicercaGlobale: RisultatoRicercaDashboard[]
+  notificheOperative: NotificaDashboard[]
+  onSyncDanea: () => void
 }
 
 function giorniAllaScadenzaDashboard(data: string) {
@@ -62,6 +72,8 @@ export default function Dashboard({
   ricercaGlobale,
   setRicercaGlobale,
   risultatiRicercaGlobale,
+  notificheOperative,
+  onSyncDanea,
 }: DashboardProps) {
   return (
     <section className="dashboard-premium">
@@ -101,6 +113,21 @@ export default function Dashboard({
           </div>
         )}
       </section>
+
+      <section className="integration-panel">
+        <div>
+          <span>Integrazioni</span>
+          <h2>Danea Domustudio</h2>
+          <p>
+            Verifica il collegamento con Danea e prepara la sincronizzazione dei dati.
+          </p>
+        </div>
+
+        <button onClick={onSyncDanea}>
+          Sincronizza Danea
+        </button>
+      </section> 
+
       <div className="analytics-grid">
         <button className="analytics-card" onClick={() => setPage("scadenze")}>
           <span>Urgenze</span>
@@ -179,7 +206,7 @@ export default function Dashboard({
               <span>Panoramica</span>
               <h2>Stato studio</h2>
             </div>
-          </div>
+          </div>        
 
           <div className="studio-summary">
             <div>
@@ -203,6 +230,38 @@ export default function Dashboard({
             </div>
           </div>
         </section>
+
+        <section className="dashboard-panel notifications-panel">
+              <div className="panel-header">
+                <div>
+                  <span>Centro operativo</span>
+                  <h2>Notifiche</h2>
+                </div>
+              </div>
+
+              <div className="notifications-list">
+                {notificheOperative.length === 0 ? (
+                  <div className="empty-state">
+                    Nessuna notifica operativa.
+                  </div>
+                ) : (
+                  notificheOperative.map((notifica) => (
+                    <div
+                      className={`notification-row ${notifica.livello}`}
+                      key={notifica.id}
+                    >
+                      <div>
+                        <span>{notifica.tipo}</span>
+
+                        <strong>{notifica.titolo}</strong>
+
+                        <p>{notifica.descrizione}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
 
         <section className="dashboard-panel activity-panel">
           <div className="panel-header">

@@ -1,0 +1,22 @@
+
+[functions.invia-scadenze]
+enabled = true
+verify_jwt = true
+import_map = "./functions/invia-scadenze/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/invia-scadenze/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/invia-scadenze/*.html" ]
+
+[functions.sync-danea]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-danea/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/sync-danea/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/sync-danea/*.html" ]
