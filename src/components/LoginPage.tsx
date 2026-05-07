@@ -4,21 +4,15 @@ import { supabase } from "../supabase"
 
 type LoginPageProps = {
   form: {
-    nome: string
-    indirizzo: string
-    comune: string
-    email_notifiche: string
     email: string
     password: string
   }
-  setForm: React.Dispatch<React.SetStateAction<{
-    nome: string
-    indirizzo: string
-    comune: string
-    email_notifiche: string
-    email: string
-    password: string
-  }>>
+  setForm: React.Dispatch<
+    React.SetStateAction<{
+      email: string
+      password: string
+    }>
+  >
 }
 
 function LoginPage({ form, setForm }: LoginPageProps) {

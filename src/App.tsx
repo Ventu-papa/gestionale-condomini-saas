@@ -19,6 +19,7 @@ function App() {
   const [user, setUser] = useState<any>(null)
   const [ricercaTimeline, setRicercaTimeline] = useState("")
   const [ricercaCondomini, setRicercaCondomini] = useState("")
+  const [showImportReport, setShowImportReport] = useState(false)
   // Ricerca globale usata nella dashboard
   const [ricercaGlobale, setRicercaGlobale] = useState("")
   const [page, setPage] = useState<Page>("home")
@@ -36,6 +37,7 @@ function App() {
   const [selectedCondominio, setSelectedCondominio] = useState<Condominio | null>(null)
   const [onboardingCompletato, setOnboardingCompletato] = useState(false)
   const [caricamentoOnboarding, setCaricamentoOnboarding] = useState(true)
+  const [duplicatiImport, setDuplicatiImport] = useState<any[]>([])
   const [nuovoImpianto, setNuovoImpianto] = useState({
     tipo: "",
     nome: "",
@@ -65,14 +67,22 @@ function App() {
   // Deve partire vuota per evitare che utenti diversi vedano dati finti o dati di altri.
   const [condomini, setCondomini] = useState<Condominio[]>([])
 
+  const [loginForm, setLoginForm] = useState({
+    email: "",
+    password: "",
+  })
+
   const [form, setForm] = useState({
-  nome: "",
-  indirizzo: "",
-  comune: "",
-  email_notifiche: "",
-  email: "",
-  password: "",
-})
+    tipo: "Condominio",
+    nome_condominio: "",
+    cod_fiscale: "",
+    indirizzo: "",
+    cap: "",
+    comune: "",
+    provincia: "",
+    dati_catastali: "",
+    email_notifiche: "",
+  })
 
   // ===============================
   // LOGIN E CONTROLLO UTENTE
@@ -91,6 +101,12 @@ function App() {
     listener.subscription.unsubscribe()
   }
 }, [])
+
+useEffect(() => {
+  setAnteprimaImport([])
+  setErroriImport([])
+  setDuplicatiImport([])
+}, [user?.id])
 
 // ===============================
 // CARICAMENTO CONFIGURAZIONE STUDIO
@@ -175,29 +191,29 @@ async function sincronizzaDanea() {
 }
 
 // ===============================
-// DAREA: COLLEGAMENTO GESTIONALE
+// DANEA: COLLEGAMENTO GESTIONALE
 // ===============================
 
 // Salva API key Danea e abilita integrazione
-async function collegaDanea(apiKey: string) {
-  if (!user || !apiKey) return
+//async function collegaDanea(apiKey: string) {
+//  if (!user || !apiKey) return
 
-  const { error } = await supabase
-    .from("studio_settings")
-    .upsert({
-      user_id: user.id,
-      danea_enabled: true,
-      danea_api_key: apiKey,
-      onboarding_completed: true,
-    })
+//  const { error } = await supabase
+//    .from("studio_settings")
+//     .upsert({
+//      user_id: user.id,
+//      danea_enabled: true,
+//      danea_api_key: apiKey,
+//      onboarding_completed: true,
+//    })
 
-  if (error) {
-    alert(error.message)
-    return
-  }
+//  if (error) {
+//    alert(error.message)
+//    return
+//  }
 
-  setOnboardingCompletato(true)
-}
+//  setOnboardingCompletato(true)
+//}
 
 // ===============================
 // ONBOARDING: COMPLETAMENTO
@@ -791,6 +807,33 @@ async function aggiungiImpianto() {
   })
 }
 
+  async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
+    if (!user) return
+
+    const { error } = await supabase
+      .from("gestionale_connections")
+      .upsert(
+        {
+          user_id: user.id,
+          provider,
+          api_key: apiKey,
+          connection_mode: "api",
+          status: apiKey ? "connected" : "not_connected",
+          last_sync_at: null,
+        },
+        {
+          onConflict: "user_id,provider",
+        }
+      )
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    alert("Gestionale collegato correttamente.")
+  }
+
   // ===============================
   // CONDOMINI: CREA / MODIFICA / ELIMINA
   // ===============================
@@ -892,9 +935,12 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
 }
 
 // ===============================
-// LETTURA EXCEL / CSV CONDOMINI
+// LETTURA EXCEL / CSV CON MERGE ANTI-DUPLICATI
 // ===============================
-// Legge il file e prepara un'anteprima senza salvare subito nel database
+// Legge il file, prepara anteprima e separa:
+// - condomìni nuovi
+// - duplicati già presenti nel database
+// - duplicati interni allo stesso file
 async function preparaAnteprimaImportCondomini(file: File) {
   if (!user) return
 
@@ -904,10 +950,78 @@ async function preparaAnteprimaImportCondomini(file: File) {
   const primoFoglio = workbook.SheetNames[0]
   const worksheet = workbook.Sheets[primoFoglio]
 
-  const righe = XLSX.utils.sheet_to_json<any>(worksheet)
+  // ===============================
+  // RICERCA AUTOMATICA HEADER EXCEL
+  // ===============================
+
+  const righeGreze = XLSX.utils.sheet_to_json<any[]>(worksheet, {
+    header: 1,
+    defval: "",
+  })
+
+  const indiceHeader = righeGreze.findIndex((riga) => {
+    const valori = riga.map((cella) =>
+      String(cella).toLowerCase().trim()
+    )
+
+    return (
+      valori.includes("nome") &&
+      valori.includes("indirizzo") &&
+      (
+        valori.includes("città") ||
+        valori.includes("citta") ||
+        valori.includes("comune")
+      )
+    )
+  })
+
+  if (indiceHeader === -1) {
+    alert("Impossibile trovare le intestazioni corrette nel file Excel.")
+    return
+  }
+
+  const righe = XLSX.utils.sheet_to_json<any>(worksheet, {
+    range: indiceHeader,
+    defval: "",
+  })
 
   const validi: any[] = []
   const errori: any[] = []
+  const duplicati: any[] = []
+
+  // Recupera i condomìni già presenti nello studio dell'utente
+  const { data: condominiEsistenti, error } = await supabase
+    .from("condomini")
+    .select("id, nome, nome_condominio, indirizzo, comune")
+    .eq("user_id", user.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // Normalizza testo per confrontare bene i duplicati
+  const normalizzaTesto = (valore: string) =>
+    String(valore || "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ")
+
+  // Crea una chiave unica basata su nome + indirizzo + comune
+  const creaChiaveDuplicato = (condominio: any) => {
+    const nome = condominio.nome || condominio.nome_condominio || ""
+    return `${normalizzaTesto(nome)}|${normalizzaTesto(condominio.indirizzo)}|${normalizzaTesto(
+      condominio.comune
+    )}`
+  }
+
+  const chiaviDatabase = new Set(
+    (condominiEsistenti || []).map((condominio) =>
+      creaChiaveDuplicato(condominio)
+    )
+  )
+
+  const chiaviFile = new Set<string>()
 
   righe.forEach((riga, index) => {
     const condominio = {
@@ -947,7 +1061,6 @@ async function preparaAnteprimaImportCondomini(file: File) {
       user_id: user.id,
     }
 
-    // Controllo campi obbligatori
     if (!condominio.nome || !condominio.indirizzo || !condominio.comune) {
       errori.push({
         riga: index + 2,
@@ -957,14 +1070,40 @@ async function preparaAnteprimaImportCondomini(file: File) {
       return
     }
 
+    const chiave = creaChiaveDuplicato(condominio)
+
+    if (chiaviDatabase.has(chiave)) {
+      duplicati.push({
+        ...condominio,
+        riga: index + 2,
+        motivo: "Già presente nel database",
+      })
+      return
+    }
+
+    if (chiaviFile.has(chiave)) {
+      duplicati.push({
+        ...condominio,
+        riga: index + 2,
+        motivo: "Duplicato nello stesso file",
+      })
+      return
+    }
+
+    chiaviFile.add(chiave)
     validi.push(condominio)
   })
 
   setAnteprimaImport(validi)
   setErroriImport(errori)
+  setDuplicatiImport(duplicati)
+
+  if (duplicati.length > 0 || errori.length > 0) {
+    setShowImportReport(true)
+  }
 
   if (validi.length === 0) {
-    alert("Nessun condominio valido trovato nel file.")
+    alert("Nessun nuovo condominio valido da importare.")
   }
 }
 
@@ -1002,10 +1141,11 @@ async function confermaImportCondomini() {
 
   setAnteprimaImport([])
   setErroriImport([])
+  setDuplicatiImport([])
 }
 
   async function creaCondominio() {
-  if (!form.nome || !form.indirizzo || !form.comune) return
+  if (!form.nome_condominio || !form.indirizzo || !form.comune) return
 
   const {
     data: { user },
@@ -1015,9 +1155,14 @@ async function confermaImportCondomini() {
     .from("condomini")
     .insert([
       {
-        nome: form.nome,
+        tipo: form.tipo,
+        nome_condominio: form.nome_condominio,
+        cod_fiscale: form.cod_fiscale,
         indirizzo: form.indirizzo,
+        cap: form.cap,
         comune: form.comune,
+        provincia: form.provincia,
+        dati_catastali: form.dati_catastali,
         email_notifiche: form.email_notifiche,
         user_id: user?.id,
       },
@@ -1034,18 +1179,21 @@ async function confermaImportCondomini() {
   }
 
   setForm({
-    nome: "",
+    tipo: "Condominio",
+    nome_condominio: "",
+    cod_fiscale: "",
     indirizzo: "",
+    cap: "",
     comune: "",
+    provincia: "",
+    dati_catastali: "",
     email_notifiche: "",
-    email: form.email,
-    password: form.password,
   })
 
   setShowModal(false)
 }
   if (!user) {
-  return <LoginPage form={form} setForm={setForm} />
+  return <LoginPage form={loginForm} setForm={setLoginForm} />
 }
 
 if (caricamentoOnboarding) {
@@ -1063,11 +1211,7 @@ if (!onboardingCompletato) {
   return (
   <OnboardingPage
   onComplete={completaOnboarding}
-  onConnectDanea={collegaDanea}
-  onImportExcel={async (file: File) => {
-    await preparaAnteprimaImportCondomini(file)
-    await completaOnboarding()
-  }}
+  onConnectGestionale={salvaCollegamentoGestionale}
 />
 )
 }
@@ -2198,43 +2342,36 @@ if (page === "documenti") {
               />
             </label>
             {anteprimaImport.length > 0 && (
-            <div className="import-preview">
+            <div className="premium-import-card">
               <h3>Anteprima importazione</h3>
 
               <p>
                 Condomini validi trovati: <strong>{anteprimaImport.length}</strong>
               </p>
 
-              <div className="import-table">
+              <div className="premium-import-table">
                 {anteprimaImport.map((condominio, index) => (
-                  <div key={index} className="import-row">
-                    <span>{condominio.nome}</span>
+                  <div key={index} className="premium-import-row premium-import-row-wide">
+                    <span>{condominio.tipo || "Condominio"}</span>
+                    <span>{condominio.nome_condominio}</span>
+                    <span>{condominio.cod_fiscale || "—"}</span>
                     <span>{condominio.indirizzo}</span>
+                    <span>{condominio.cap || "—"}</span>
                     <span>{condominio.comune}</span>
-                    <span>{condominio.email_notifiche || "Nessuna email"}</span>
+                    <span>{condominio.provincia || "—"}</span>
+                    <span>{condominio.dati_catastali || "—"}</span>
                   </div>
                 ))}
               </div>
 
-              <button
+             <button
                 type="button"
+                className="premium-save-button"
                 onClick={confermaImportCondomini}
                 disabled={importInCorso}
               >
                 {importInCorso ? "Importazione in corso..." : "Conferma importazione"}
               </button>
-            </div>
-          )}
-
-          {erroriImport.length > 0 && (
-            <div className="import-errors">
-              <h3>Righe escluse</h3>
-
-              {erroriImport.map((errore, index) => (
-                <div key={index}>
-                  Riga {errore.riga}: {errore.motivo}
-                </div>
-              ))}
             </div>
           )}
           </div>
@@ -2335,72 +2472,177 @@ if (page === "documenti") {
             ))}
           </div>
 
+          {showImportReport && (
+            <div className="premium-modal">
+              <div className="premium-import-report">
+                <div className="modal-header">
+                  <h2>Report importazione</h2>
+
+                  <button
+                    className="icon-button"
+                    onClick={() => setShowImportReport(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {duplicatiImport.length > 0 && (
+                  <div className="report-section warning">
+                    <h3>Duplicati rilevati</h3>
+
+                    {duplicatiImport.map((duplicato, index) => (
+                      <div key={index} className="report-row">
+                        Riga {duplicato.riga}: {duplicato.nome_condominio} —{" "}
+                        {duplicato.motivo}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {erroriImport.length > 0 && (
+                  <div className="report-section danger">
+                    <h3>Righe escluse</h3>
+
+                    {erroriImport.map((errore, index) => (
+                      <div key={index} className="report-row">
+                        Riga {errore.riga}: {errore.motivo}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  className="premium-save-button"
+                  onClick={() => setShowImportReport(false)}
+                >
+                  Ho capito
+                </button>
+              </div>
+            </div>
+          )}
+
           {showModal && (
-            <div className="modal-overlay">
-              <div className="modal">
+            <div className="premium-modal">
+              <div className="premium-modal-card">
                 <div className="modal-header">
                   <h2>Nuovo condominio</h2>
+
                   <button className="icon-button" onClick={() => setShowModal(false)}>
                     ×
                   </button>
                 </div>
 
-                <label>
-                  Nome condominio
-                  <input
-                    value={form.nome}
-                    onChange={(e) =>
-                      setForm({ ...form, nome: e.target.value })
-                    }
-                    placeholder="Es. Condominio Via Roma 12"
-                  />
-                </label>
+                <div className="premium-form-grid">
+                  <label>
+                    Tipo
+                    <select
+                      value={form.tipo}
+                      onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+                    >
+                      <option value="Condominio">Condominio</option>
+                      <option value="Supercondominio">Supercondominio</option>
+                      <option value="Residence">Residence</option>
+                      <option value="Centro commerciale">Centro commerciale</option>
+                    </select>
+                  </label>
 
-                <label>
-                  Indirizzo
-                  <input
-                    value={form.indirizzo}
-                    onChange={(e) =>
-                      setForm({ ...form, indirizzo: e.target.value })
-                    }
-                    placeholder="Es. Via Roma 12"
-                  />
-                </label>
-
-                <label>
-                  Comune
-                  <input
-                    value={form.comune}
-                    onChange={(e) =>
-                      setForm({ ...form, comune: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        creaCondominio()
+                  <label>
+                    Nome condominio
+                    <input
+                      value={form.nome_condominio}
+                      onChange={(e) =>
+                        setForm({ ...form, nome_condominio: e.target.value })
                       }
-                    }}
-                    placeholder="Es. Bologna"
-                  />
-                </label>
+                      placeholder="Es. Condominio Via Roma 12"
+                    />
+                  </label>
 
-                <label>
-                  Email notifiche
-                  <input
-                    type="email"
-                    value={form.email_notifiche}
-                    onChange={(e) =>
-                      setForm({ ...form, email_notifiche: e.target.value })
-                    }
-                    placeholder="Es. studio@email.it"
-                  />
-                </label>
+                  <label>
+                    Codice fiscale
+                    <input
+                      value={form.cod_fiscale}
+                      onChange={(e) =>
+                        setForm({ ...form, cod_fiscale: e.target.value })
+                      }
+                      placeholder="Es. 01234567890"
+                    />
+                  </label>
 
-                <button className="full-button" onClick={creaCondominio}>
+                  <label>
+                    Indirizzo
+                    <input
+                      value={form.indirizzo}
+                      onChange={(e) =>
+                        setForm({ ...form, indirizzo: e.target.value })
+                      }
+                      placeholder="Es. Via Roma 12"
+                    />
+                  </label>
+
+                  <label>
+                    CAP
+                    <input
+                      value={form.cap}
+                      onChange={(e) => setForm({ ...form, cap: e.target.value })}
+                      placeholder="Es. 40100"
+                    />
+                  </label>
+
+                  <label>
+                    Comune
+                    <input
+                      value={form.comune}
+                      onChange={(e) => setForm({ ...form, comune: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          creaCondominio()
+                        }
+                      }}
+                      placeholder="Es. Bologna"
+                    />
+                  </label>
+
+                  <label>
+                    Provincia
+                    <input
+                      value={form.provincia}
+                      onChange={(e) =>
+                        setForm({ ...form, provincia: e.target.value })
+                      }
+                      placeholder="Es. BO"
+                    />
+                  </label>
+
+                  <label>
+                    Dati catastali
+                    <textarea
+                      value={form.dati_catastali}
+                      onChange={(e) =>
+                        setForm({ ...form, dati_catastali: e.target.value })
+                      }
+                      placeholder="Foglio, particella, subalterno..."
+                    />
+                  </label>
+
+                  <label>
+                    Email notifiche
+                    <input
+                      type="email"
+                      value={form.email_notifiche}
+                      onChange={(e) =>
+                        setForm({ ...form, email_notifiche: e.target.value })
+                      }
+                      placeholder="Es. studio@email.it"
+                    />
+                  </label>
+                </div>
+
+                <button className="premium-save-button" onClick={creaCondominio}>
                   Salva condominio
                 </button>
               </div>
             </div>
-          )}
+)}
         </section>
     )
   }

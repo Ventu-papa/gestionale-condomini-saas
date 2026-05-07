@@ -1460,6 +1460,7 @@ option {
 
 .onboarding-connect {
   width: 100%;
+  margin-top: auto;
 }
 
 /* ===============================
@@ -1517,4 +1518,343 @@ option {
   background: rgba(30, 41, 59, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.22);
   white-space: nowrap;
+}
+/* ===============================
+   PREMIUM MODAL CONDOMINI
+================================ */
+
+.premium-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  background: rgba(3, 7, 18, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  display: flex;
+  justify-content: center;
+
+  overflow-y: auto;
+
+  padding:
+    40px
+    32px
+    120px;
+}
+.premium-modal-card {
+  width: min(980px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 28px;
+  padding: 28px;
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96)),
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 35%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.premium-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.premium-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.premium-form-grid input,
+.premium-form-grid select,
+.premium-form-grid textarea {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.72);
+  color: #f8fafc;
+  padding: 12px 14px;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+.premium-form-grid textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.premium-form-grid input:focus,
+.premium-form-grid select:focus,
+.premium-form-grid textarea:focus {
+  border-color: rgba(249, 115, 22, 0.85);
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.12);
+}
+
+.premium-save-button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 22px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  color: #111827;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 18px 40px rgba(249, 115, 22, 0.28);
+  transition: 0.2s ease;
+}
+
+.premium-save-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 55px rgba(249, 115, 22, 0.36);
+}
+
+.premium-save-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ===============================
+   PREMIUM EXCEL IMPORT PREVIEW
+================================ */
+
+.premium-import-card,
+.import-errors,
+.import-duplicates {
+  margin-top: 24px;
+  padding: 22px;
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.35);
+}
+
+.premium-import-card h3,
+.import-errors h3,
+.import-duplicates h3 {
+  margin: 0 0 12px;
+  color: #f8fafc;
+  font-size: 20px;
+}
+
+.premium-import-card p {
+  color: #cbd5e1;
+}
+
+.premium-import-table {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.premium-import-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.3fr 0.9fr 1.2fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+.premium-import-row span:first-child {
+  color: #fff7ed;
+  font-weight: 800;
+}
+
+.import-errors {
+  border-color: rgba(239, 68, 68, 0.32);
+}
+
+.import-errors div {
+  color: #fecaca;
+  padding: 6px 0;
+}
+
+.import-duplicates {
+  border-color: rgba(251, 146, 60, 0.34);
+}
+
+.import-duplicates div {
+  color: #fed7aa;
+  padding: 6px 0;
+}
+
+@media (max-width: 780px) {
+  .premium-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .premium-import-row {
+    grid-template-columns: 1fr;
+  }
+
+  .premium-modal {
+    padding: 16px;
+  }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.premium-import-report {
+  width: min(760px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: 28px;
+  padding: 28px;
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+}
+
+.report-section {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.75);
+}
+
+.report-section h3 {
+  margin: 0 0 12px;
+  color: #f8fafc;
+}
+
+.report-section.warning {
+  border: 1px solid rgba(251, 146, 60, 0.35);
+}
+
+.report-section.danger {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.report-row {
+  padding: 8px 0;
+  color: #e5e7eb;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.premium-import-row-wide {
+  grid-template-columns: 0.9fr 1.4fr 1fr 1.4fr 0.6fr 1fr 0.6fr 1.5fr;
+  min-width: 1100px;
+}
+
+.premium-import-table {
+  overflow-x: auto;
+}
+.onboarding-option-clickable {
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.onboarding-option-clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.gestionali-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  margin-bottom: 26px;
+}
+.gestionale-badge {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.24);
+  color: #fdba74;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gestionali-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.gestionale-card {
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  cursor: pointer;
+  transition: 0.22s ease;
+}
+
+.gestionale-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(249, 115, 22, 0.38);
+}
+
+.gestionale-card.active {
+  border-color: rgba(249, 115, 22, 0.9);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.16);
+}
+
+.gestionale-card strong {
+  display: block;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.gestionale-card p {
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.gestionale-config-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.excel-import-info p {
+  color: #cbd5e1;
+  margin-bottom: 18px;
+}
+.onboarding-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboarding-option {
+  min-height: 360px;
+}
+
+.onboarding-manual-card {
+  text-align: left;
+}
+
+.onboarding-manual-card strong {
+  max-width: 340px;
+}
+
+@media (max-width: 900px) {
+  .onboarding-grid {
+    grid-template-columns: 1fr;
+  }
 }
