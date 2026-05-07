@@ -9,7 +9,7 @@ import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
 import Sidebar from "./components/sidebar"
 import * as XLSX from "xlsx"
-import OnboardingPage from "./components/OnboardingPage"
+import OnboardingPage from "./components/onboarding-page"
 
 function App() {
  
@@ -2118,6 +2118,22 @@ if (page === "documenti") {
             <button onClick={() => setShowModal(true)}>
               + Nuovo condominio
             </button>
+            <label className="import-excel-button">
+              Importa Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                hidden
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+
+                  if (file) {
+                    await importaCondominiDaExcel(file)
+                    e.target.value = ""
+                  }
+                }}
+              />
+            </label>
           </div>
           <input
             className="search-input"

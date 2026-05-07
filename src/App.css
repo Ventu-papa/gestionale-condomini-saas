@@ -1506,3 +1506,15 @@ option {
     align-items: flex-start;
   }
 }
+.import-excel-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  white-space: nowrap;
+}
