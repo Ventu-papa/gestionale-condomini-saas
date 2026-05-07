@@ -74,7 +74,7 @@ export default function Dashboard({
   setRicercaGlobale,
   risultatiRicercaGlobale,
   notificheOperative,
-  onSyncDanea,
+  onSyncDanea: _onSyncDanea,
   onOpenGestionaleModal,
 }: DashboardProps) {
   return (
