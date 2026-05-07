@@ -9,7 +9,7 @@ import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
 import Sidebar from "./components/sidebar"
 import * as XLSX from "xlsx"
-import OnboardingPage from "./components/OnBoardingPage"
+import OnboardingPage from "./components/OnboardingPage"
 
 function App() {
  
@@ -982,7 +982,7 @@ if (!onboardingCompletato) {
   <OnboardingPage
   onComplete={completaOnboarding}
   onConnectDanea={collegaDanea}
-  onImportExcel={async (file) => {
+  onImportExcel={async (file: File) => {
     await importaCondominiDaExcel(file)
     await completaOnboarding()
   }}
