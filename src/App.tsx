@@ -22,6 +22,9 @@ function App() {
   // Ricerca globale usata nella dashboard
   const [ricercaGlobale, setRicercaGlobale] = useState("")
   const [page, setPage] = useState<Page>("home")
+  const [anteprimaImport, setAnteprimaImport] = useState<any[]>([])
+  const [erroriImport, setErroriImport] = useState<any[]>([])
+  const [importInCorso, setImportInCorso] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingCondominioId, setEditingCondominioId] = useState<number | null>(null)
   const [editingImpiantoId, setEditingImpiantoId] = useState<number | null>(null)
@@ -889,11 +892,10 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
 }
 
 // ===============================
-// IMPORT EXCEL / CSV CONDOMINI
+// LETTURA EXCEL / CSV CONDOMINI
 // ===============================
-
-// Legge un file Excel/CSV e crea automaticamente i condomìni
-async function importaCondominiDaExcel(file: File) {
+// Legge il file e prepara un'anteprima senza salvare subito nel database
+async function preparaAnteprimaImportCondomini(file: File) {
   if (!user) return
 
   const buffer = await file.arrayBuffer()
@@ -904,30 +906,88 @@ async function importaCondominiDaExcel(file: File) {
 
   const righe = XLSX.utils.sheet_to_json<any>(worksheet)
 
-  const condominiDaInserire = righe
-    .map((riga) => ({
-      nome: riga.nome || riga.Nome || riga.condominio || riga.Condominio || "",
-      indirizzo: riga.indirizzo || riga.Indirizzo || "",
-      comune: riga.comune || riga.Comune || "",
+  const validi: any[] = []
+  const errori: any[] = []
+
+  righe.forEach((riga, index) => {
+    const condominio = {
+      nome:
+        riga.nome ||
+        riga.Nome ||
+        riga.condominio ||
+        riga.Condominio ||
+        riga["Nome condominio"] ||
+        riga["Nome Condominio"] ||
+        "",
+
+      indirizzo:
+        riga.indirizzo ||
+        riga.Indirizzo ||
+        riga.via ||
+        riga.Via ||
+        "",
+
+      comune:
+        riga.comune ||
+        riga.Comune ||
+        riga.citta ||
+        riga.Citta ||
+        riga["Città"] ||
+        "",
+
       email_notifiche:
         riga.email_notifiche ||
         riga.Email_notifiche ||
         riga.email ||
         riga.Email ||
+        riga.mail ||
+        riga.Mail ||
         "",
-      user_id: user.id,
-    }))
-    .filter((condominio) => condominio.nome && condominio.indirizzo && condominio.comune)
 
-  if (condominiDaInserire.length === 0) {
+      user_id: user.id,
+    }
+
+    // Controllo campi obbligatori
+    if (!condominio.nome || !condominio.indirizzo || !condominio.comune) {
+      errori.push({
+        riga: index + 2,
+        motivo: "Mancano nome, indirizzo o comune",
+        dati: riga,
+      })
+      return
+    }
+
+    validi.push(condominio)
+  })
+
+  setAnteprimaImport(validi)
+  setErroriImport(errori)
+
+  if (validi.length === 0) {
     alert("Nessun condominio valido trovato nel file.")
+  }
+}
+
+// ===============================
+// IMPORT DEFINITIVO CONDOMINI
+// ===============================
+// Salva nel database solo i condomìni già validati nell'anteprima
+async function confermaImportCondomini() {
+  if (!user) return
+
+  if (anteprimaImport.length === 0) {
+    alert("Non ci sono condomìni validi da importare.")
     return
   }
 
+  setImportInCorso(true)
+
   const { data, error } = await supabase
     .from("condomini")
-    .insert(condominiDaInserire)
+    .insert(anteprimaImport)
     .select()
+
+  setImportInCorso(false)
 
   if (error) {
     alert(error.message)
@@ -938,7 +998,10 @@ async function importaCondominiDaExcel(file: File) {
     setCondomini((prev) => [...data, ...prev])
   }
 
-  alert(`${condominiDaInserire.length} condomìni importati correttamente.`)
+  alert(`${anteprimaImport.length} condomìni importati correttamente.`)
+
+  setAnteprimaImport([])
+  setErroriImport([])
 }
 
   async function creaCondominio() {
@@ -1002,7 +1065,7 @@ if (!onboardingCompletato) {
   onComplete={completaOnboarding}
   onConnectDanea={collegaDanea}
   onImportExcel={async (file: File) => {
-    await importaCondominiDaExcel(file)
+    await preparaAnteprimaImportCondomini(file)
     await completaOnboarding()
   }}
 />
@@ -2128,12 +2191,52 @@ if (page === "documenti") {
                   const file = e.target.files?.[0]
 
                   if (file) {
-                    await importaCondominiDaExcel(file)
+                    await preparaAnteprimaImportCondomini(file)
                     e.target.value = ""
                   }
                 }}
               />
             </label>
+            {anteprimaImport.length > 0 && (
+            <div className="import-preview">
+              <h3>Anteprima importazione</h3>
+
+              <p>
+                Condomini validi trovati: <strong>{anteprimaImport.length}</strong>
+              </p>
+
+              <div className="import-table">
+                {anteprimaImport.map((condominio, index) => (
+                  <div key={index} className="import-row">
+                    <span>{condominio.nome}</span>
+                    <span>{condominio.indirizzo}</span>
+                    <span>{condominio.comune}</span>
+                    <span>{condominio.email_notifiche || "Nessuna email"}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={confermaImportCondomini}
+                disabled={importInCorso}
+              >
+                {importInCorso ? "Importazione in corso..." : "Conferma importazione"}
+              </button>
+            </div>
+          )}
+
+          {erroriImport.length > 0 && (
+            <div className="import-errors">
+              <h3>Righe escluse</h3>
+
+              {erroriImport.map((errore, index) => (
+                <div key={index}>
+                  Riga {errore.riga}: {errore.motivo}
+                </div>
+              ))}
+            </div>
+          )}
           </div>
           <input
             className="search-input"
