@@ -42,6 +42,17 @@ function App() {
   const [editingDocumentoId, setEditingDocumentoId] = useState<number | null>(null) 
   // Stato che indica quale ticket è in modifica
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean
+    title: string
+    message: string
+    onConfirm: (() => void) | null
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  })
   const [selectedCondominio, setSelectedCondominio] = useState<Condominio | null>(null)
   const [onboardingCompletato, setOnboardingCompletato] = useState(false)
   const [caricamentoOnboarding, setCaricamentoOnboarding] = useState(true)
@@ -333,6 +344,58 @@ function renderSaasLayout(contenuto: ReactNode) {
         }}
       />
 
+      {confirmModal.open && (
+  <div className="premium-modal">
+    <div className="premium-confirm-card">
+      <h2>{confirmModal.title}</h2>
+      <p>{confirmModal.message}</p>
+
+      <div className="confirm-actions">
+        <button
+          className="secondary"
+          onClick={() =>
+            setConfirmModal({
+              open: false,
+              title: "",
+              message: "",
+              onConfirm: null,
+            })
+          }
+        >
+          Annulla
+        </button>
+
+        <button
+            className="premium-save-button"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                confirmModal.onConfirm?.()
+                setConfirmModal({
+                  open: false,
+                  title: "",
+                  message: "",
+                  onConfirm: null,
+                })
+              }
+            }}
+            onClick={() => {
+              confirmModal.onConfirm?.()
+              setConfirmModal({
+                open: false,
+                title: "",
+                message: "",
+                onConfirm: null,
+              })
+            }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
       <section className="saas-content">
         {contenuto}
       </section>
@@ -459,29 +522,35 @@ function renderSaasLayout(contenuto: ReactNode) {
   async function eliminaEventoTimeline(idEvento: number) {
   if (!selectedCondominio) return
 
-  const timelineAggiornata = (selectedCondominio.timeline ?? []).filter(
-    (evento) => evento.id !== idEvento
-  )
+  apriConferma(
+    "Eliminare evento?",
+    "Questa azione eliminerà l’evento dalla timeline.",
+    async () => {
+      const timelineAggiornata = (selectedCondominio.timeline ?? []).filter(
+        (evento) => evento.id !== idEvento
+      )
 
-  const { error } = await supabase
-    .from("condomini")
-    .update({ timeline: timelineAggiornata })
-    .eq("id", selectedCondominio.id)
+      const { error } = await supabase
+        .from("condomini")
+        .update({ timeline: timelineAggiornata })
+        .eq("id", selectedCondominio.id)
 
-  if (error) {
-    alert(error.message)
-    return
-  }
+      if (error) {
+        alert(error.message)
+        return
+      }
 
-  const aggiornato = {
-    ...selectedCondominio,
-    timeline: timelineAggiornata,
-  }
+      const aggiornato = {
+        ...selectedCondominio,
+        timeline: timelineAggiornata,
+      }
 
-  setSelectedCondominio(aggiornato)
+      setSelectedCondominio(aggiornato)
 
-  setCondomini((prev) =>
-    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      setCondomini((prev) =>
+        prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      )
+    }
   )
 }
 
@@ -524,62 +593,48 @@ async function scaricaDocumento(filePath: string, nomeFile?: string) {
 
 // Elimina documento da storage + database
 async function eliminaDocumento(documento: Documento) {
-
-  // Controllo sicurezza
   if (!selectedCondominio) return
 
-  // Conferma utente
-  const conferma = confirm("Vuoi eliminare questo documento?")
-  if (!conferma) return
+  apriConferma(
+    "Eliminare documento?",
+    "Questa azione eliminerà il documento e il file collegato.",
+    async () => {
+      if (documento.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from("documenti")
+          .remove([documento.file_path])
 
-  // Se il documento ha un file salvato nello storage
-  // lo eliminiamo da Supabase Storage
-  if (documento.file_path) {
+        if (storageError) {
+          alert(storageError.message)
+          return
+        }
+      }
 
-    const { error: storageError } = await supabase.storage
-      .from("documenti")
-      .remove([documento.file_path])
+      const documentiAggiornati = (selectedCondominio.documenti ?? []).filter(
+        (doc) => doc.id !== documento.id
+      )
 
-    // Gestione errore storage
-    if (storageError) {
-      alert(storageError.message)
-      return
+      const { error } = await supabase
+        .from("condomini")
+        .update({ documenti: documentiAggiornati })
+        .eq("id", selectedCondominio.id)
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      const aggiornato = {
+        ...selectedCondominio,
+        documenti: documentiAggiornati,
+      }
+
+      setSelectedCondominio(aggiornato)
+
+      setCondomini((prev) =>
+        prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      )
     }
-  }
-
-  // Rimuove documento dalla lista locale
-  const documentiAggiornati =
-    (selectedCondominio.documenti ?? []).filter(
-      (doc) => doc.id !== documento.id
-    )
-
-  // Aggiorna il condominio nel database
-  const { error } = await supabase
-    .from("condomini")
-    .update({
-      documenti: documentiAggiornati,
-    })
-    .eq("id", selectedCondominio.id)
-
-  // Gestione errore database
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  // Aggiorna stato locale frontend
-  const aggiornato = {
-    ...selectedCondominio,
-    documenti: documentiAggiornati,
-  }
-
-  setSelectedCondominio(aggiornato)
-
-  // Aggiorna lista condomini globale
-  setCondomini((prev) =>
-    prev.map((c) =>
-      c.id === aggiornato.id ? aggiornato : c
-    )
   )
 }
 
@@ -847,38 +902,37 @@ async function modificaTicket(ticketAggiornato: Ticket) {
 
 // Elimina un ticket dal condominio selezionato
 async function eliminaTicket(idTicket: number) {
-  // Controllo sicurezza
   if (!selectedCondominio) return
 
-  const conferma = confirm("Vuoi eliminare questo ticket?")
-  if (!conferma) return
+  apriConferma(
+    "Eliminare ticket?",
+    "Questa azione eliminerà il ticket selezionato.",
+    async () => {
+      const ticketAggiornati = (selectedCondominio.ticket ?? []).filter(
+        (ticket) => ticket.id !== idTicket
+      )
 
-  // Rimuove il ticket dalla lista
-  const ticketAggiornati = (selectedCondominio.ticket ?? []).filter(
-    (ticket) => ticket.id !== idTicket
-  )
+      const { error } = await supabase
+        .from("condomini")
+        .update({ ticket: ticketAggiornati })
+        .eq("id", selectedCondominio.id)
 
-  // Salva su Supabase
-  const { error } = await supabase
-    .from("condomini")
-    .update({ ticket: ticketAggiornati })
-    .eq("id", selectedCondominio.id)
+      if (error) {
+        alert(error.message)
+        return
+      }
 
-  if (error) {
-    alert(error.message)
-    return
-  }
+      const aggiornato = {
+        ...selectedCondominio,
+        ticket: ticketAggiornati,
+      }
 
-  // Aggiorna frontend
-  const aggiornato = {
-    ...selectedCondominio,
-    ticket: ticketAggiornati,
-  }
+      setSelectedCondominio(aggiornato)
 
-  setSelectedCondominio(aggiornato)
-
-  setCondomini((prev) =>
-    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      setCondomini((prev) =>
+        prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      )
+    }
   )
 }
 
@@ -892,29 +946,30 @@ async function eliminaTicketGlobale(ticketDaEliminare: any) {
     return
   }
 
-  const conferma = confirm("Vuoi eliminare questo ticket?")
-  if (!conferma) return
+  apriConferma(
+    "Eliminare ticket?",
+    "Questa azione eliminerà il ticket selezionato.",
+    async () => {
+      const ticketAggiornati = (condominio.ticket ?? []).filter(
+        (ticket) => ticket.id !== ticketDaEliminare.id
+      )
 
-  const ticketAggiornati = (condominio.ticket ?? []).filter(
-    (ticket) => ticket.id !== ticketDaEliminare.id
-  )
+      const { error } = await supabase
+        .from("condomini")
+        .update({ ticket: ticketAggiornati })
+        .eq("id", condominio.id)
 
-  const { error } = await supabase
-    .from("condomini")
-    .update({ ticket: ticketAggiornati })
-    .eq("id", condominio.id)
+      if (error) {
+        alert(error.message)
+        return
+      }
 
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  setCondomini((prev) =>
-    prev.map((c) =>
-      c.id === condominio.id
-        ? { ...c, ticket: ticketAggiornati }
-        : c
-    )
+      setCondomini((prev) =>
+        prev.map((c) =>
+          c.id === condominio.id ? { ...c, ticket: ticketAggiornati } : c
+        )
+      )
+    }
   )
 }
 
@@ -925,29 +980,35 @@ async function eliminaTicketGlobale(ticketDaEliminare: any) {
   async function eliminaImpianto(idImpianto: number) {
   if (!selectedCondominio) return
 
-  const impiantiAggiornati = (selectedCondominio.impianti ?? []).filter(
-    (impianto) => impianto.id !== idImpianto
-  )
+  apriConferma(
+    "Eliminare impianto?",
+    "Questa azione eliminerà l’impianto dal condominio.",
+    async () => {
+      const impiantiAggiornati = (selectedCondominio.impianti ?? []).filter(
+        (impianto) => impianto.id !== idImpianto
+      )
 
-  const { error } = await supabase
-    .from("condomini")
-    .update({ impianti: impiantiAggiornati })
-    .eq("id", selectedCondominio.id)
+      const { error } = await supabase
+        .from("condomini")
+        .update({ impianti: impiantiAggiornati })
+        .eq("id", selectedCondominio.id)
 
-  if (error) {
-    alert(error.message)
-    return
-  }
+      if (error) {
+        alert(error.message)
+        return
+      }
 
-  const aggiornato = {
-    ...selectedCondominio,
-    impianti: impiantiAggiornati,
-  }
+      const aggiornato = {
+        ...selectedCondominio,
+        impianti: impiantiAggiornati,
+      }
 
-  setSelectedCondominio(aggiornato)
+      setSelectedCondominio(aggiornato)
 
-  setCondomini((prev) =>
-    prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      setCondomini((prev) =>
+        prev.map((c) => (c.id === aggiornato.id ? aggiornato : c))
+      )
+    }
   )
 }
 
@@ -1053,26 +1114,26 @@ async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
 async function scollegaGestionale() {
   if (!user || !gestionaleAttivo) return
 
-  const conferma = confirm(
-    "Vuoi scollegare il gestionale principale?"
+  apriConferma(
+    "Scollegare gestionale?",
+    "Questa azione scollega il gestionale principale dello studio.",
+    async () => {
+      const { error } = await supabase
+        .from("gestionale_connections")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("provider", gestionaleAttivo.provider)
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      setGestionaleAttivo(null)
+
+      alert("Gestionale scollegato correttamente.")
+    }
   )
-
-  if (!conferma) return
-
-  const { error } = await supabase
-    .from("gestionale_connections")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider", gestionaleAttivo.provider)
-
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  setGestionaleAttivo(null)
-
-  alert("Gestionale scollegato correttamente.")
 }
 
 async function sincronizzaGestionaleAttivo() {
@@ -1172,21 +1233,33 @@ async function modificaEventoTimeline(eventoAggiornato: TimelineEvent) {
   setEditingEventoId(null)
 }
 
+function apriConferma(title: string, message: string, onConfirm: () => void) {
+  setConfirmModal({
+    open: true,
+    title,
+    message,
+    onConfirm,
+  })
+}
+
   async function eliminaCondominio(id: number) {
-  const conferma = confirm("Vuoi eliminare questo condominio?")
-  if (!conferma) return
+  apriConferma(
+    "Eliminare condominio?",
+    "Questa azione eliminerà il condominio selezionato.",
+    async () => {
+      const { error } = await supabase
+        .from("condomini")
+        .delete()
+        .eq("id", id)
 
-  const { error } = await supabase
-    .from("condomini")
-    .delete()
-    .eq("id", id)
+      if (error) {
+        alert(error.message)
+        return
+      }
 
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  setCondomini((prev) => prev.filter((c) => c.id !== id))
+      setCondomini((prev) => prev.filter((c) => c.id !== id))
+    }
+  )
 }
 
 // ===============================
@@ -1710,16 +1783,60 @@ async function modificaCommunicationEvent(eventoAggiornato: any) {
   setEditingCommunicationId(null)
 }
 
-async function eliminaCommunicationEvent(idEvento: string) {
+async function eliminaCommunicationEvent(evento: any) {
   if (!user) return
 
-  const conferma = confirm("Vuoi eliminare questa comunicazione?")
-  if (!conferma) return
+  function apriConferma(title: string, message: string, onConfirm: () => void) {
+  setConfirmModal({
+    open: true,
+    title,
+    message,
+    onConfirm,
+  })
+}
 
+  apriConferma(
+    "Eliminare comunicazione?",
+    "Se questa comunicazione ha generato un ticket, verrà eliminato anche il ticket collegato.",
+    async () => {
+      // qui dentro metti tutta la logica di eliminazione
+    }
+  )
+
+  // Se la comunicazione aveva creato un ticket, eliminiamo anche quel ticket dal condominio
+  if (evento.linked_ticket_id && evento.condominio_id) {
+    const condominio = condomini.find((c) => c.id === evento.condominio_id)
+
+    if (condominio) {
+      const ticketAggiornati = (condominio.ticket ?? []).filter(
+        (ticket) => ticket.id !== evento.linked_ticket_id
+      )
+
+      const { error: ticketError } = await supabase
+        .from("condomini")
+        .update({ ticket: ticketAggiornati })
+        .eq("id", condominio.id)
+
+      if (ticketError) {
+        alert(ticketError.message)
+        return
+      }
+
+      setCondomini((prev) =>
+        prev.map((c) =>
+          c.id === condominio.id
+            ? { ...c, ticket: ticketAggiornati }
+            : c
+        )
+      )
+    }
+  }
+
+  // Elimina la comunicazione
   const { error } = await supabase
     .from("communication_events")
     .delete()
-    .eq("id", idEvento)
+    .eq("id", evento.id)
     .eq("user_id", user.id)
 
   if (error) {
@@ -1728,7 +1845,7 @@ async function eliminaCommunicationEvent(idEvento: string) {
   }
 
   setCommunicationEvents((prev) =>
-    prev.filter((evento) => evento.id !== idEvento)
+    prev.filter((item) => item.id !== evento.id)
   )
 }
 
@@ -3289,7 +3406,6 @@ if (page === "documenti") {
     </div>
   ) : (
     communicationEvents.slice(0, 8).map((evento) => {
-     
 
       return (
       <div className="communication-row" key={evento.id}>
@@ -3437,7 +3553,7 @@ if (page === "documenti") {
 
           <button
             className="danger-button small"
-            onClick={() => eliminaCommunicationEvent(evento.id)}
+            onClick={() => eliminaCommunicationEvent(evento)}
           >
             Elimina
           </button>
