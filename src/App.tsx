@@ -3289,9 +3289,7 @@ if (page === "documenti") {
     </div>
   ) : (
     communicationEvents.slice(0, 8).map((evento) => {
-      const ticketGiaCreato =
-        evento.status === "ticket_created" || Boolean(evento.linked_ticket_id)
-      const priorityEvento = evento.priority || "media"
+     
 
       return (
       <div className="communication-row" key={evento.id}>
