@@ -2115,3 +2115,28 @@ option {
   color: #93c5fd;
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
+
+.communication-row input,
+.communication-row textarea,
+.communication-row select {
+  width: 100%;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.72);
+  color: #f8fafc;
+  padding: 11px 13px;
+  outline: none;
+}
+
+.communication-row textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.communication-row input:focus,
+.communication-row textarea:focus,
+.communication-row select:focus {
+  border-color: rgba(249, 115, 22, 0.85);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+}

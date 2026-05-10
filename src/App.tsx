@@ -30,6 +30,7 @@ function App() {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
   const [gestionaleSelezionato, setGestionaleSelezionato] = useState("")
   const [apiKeyGestionale, setApiKeyGestionale] = useState("")
+  const [editingCommunicationId, setEditingCommunicationId] = useState<string | null>(null)
   const [anteprimaImport, setAnteprimaImport] = useState<any[]>([])
   const [erroriImport, setErroriImport] = useState<any[]>([])
   const [importInCorso, setImportInCorso] = useState(false)
@@ -1680,6 +1681,57 @@ async function creaTicketDaCommunicationEvent(evento: any) {
   alert("Ticket creato dalla comunicazione.")
 }
 
+async function modificaCommunicationEvent(eventoAggiornato: any) {
+  if (!user) return
+
+  const { error } = await supabase
+    .from("communication_events")
+    .update({
+      channel: eventoAggiornato.channel,
+      sender: eventoAggiornato.sender,
+      subject: eventoAggiornato.subject,
+      body: eventoAggiornato.body,
+      priority: eventoAggiornato.priority,
+    })
+    .eq("id", eventoAggiornato.id)
+    .eq("user_id", user.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setCommunicationEvents((prev) =>
+    prev.map((evento) =>
+      evento.id === eventoAggiornato.id ? eventoAggiornato : evento
+    )
+  )
+
+  setEditingCommunicationId(null)
+}
+
+async function eliminaCommunicationEvent(idEvento: string) {
+  if (!user) return
+
+  const conferma = confirm("Vuoi eliminare questa comunicazione?")
+  if (!conferma) return
+
+  const { error } = await supabase
+    .from("communication_events")
+    .delete()
+    .eq("id", idEvento)
+    .eq("user_id", user.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setCommunicationEvents((prev) =>
+    prev.filter((evento) => evento.id !== idEvento)
+  )
+}
+
   if (!user) {
   return <LoginPage form={loginForm} setForm={setLoginForm} />
 }
@@ -3243,43 +3295,159 @@ if (page === "documenti") {
 
       return (
       <div className="communication-row" key={evento.id}>
-        <span className={`communication-channel ${evento.channel}`}>
-          {evento.channel}
-        </span>
+  {editingCommunicationId === evento.id ? (
+    <>
+      <select
+        value={evento.channel}
+        onChange={(e) =>
+          setCommunicationEvents((prev) =>
+            prev.map((item) =>
+              item.id === evento.id
+                ? { ...item, channel: e.target.value }
+                : item
+            )
+          )
+        }
+      >
+        <option value="email">Email</option>
+        <option value="pec">PEC</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="phone">Telefono</option>
+      </select>
 
-        <div>
-          <strong>{evento.subject || "Senza oggetto"}</strong>
-          <span className={`communication-priority ${priorityEvento}`}>
-            Priorità {priorityEvento}
-          </span>
+      <div>
+        <input
+          value={evento.sender || ""}
+          onChange={(e) =>
+            setCommunicationEvents((prev) =>
+              prev.map((item) =>
+                item.id === evento.id
+                  ? { ...item, sender: e.target.value }
+                  : item
+              )
+            )
+          }
+          placeholder="Mittente"
+        />
 
-          {ticketGiaCreato && (
-            <span className="communication-managed-badge">
-              Ticket creato
-            </span>
-          )}
+        <input
+          value={evento.subject || ""}
+          onChange={(e) =>
+            setCommunicationEvents((prev) =>
+              prev.map((item) =>
+                item.id === evento.id
+                  ? { ...item, subject: e.target.value }
+                  : item
+              )
+            )
+          }
+          placeholder="Oggetto"
+        />
 
-          <p>{evento.body || "Nessun contenuto disponibile."}</p>
+        <textarea
+          value={evento.body || ""}
+          onChange={(e) =>
+            setCommunicationEvents((prev) =>
+              prev.map((item) =>
+                item.id === evento.id
+                  ? { ...item, body: e.target.value }
+                  : item
+              )
+            )
+          }
+          placeholder="Contenuto comunicazione"
+        />
 
-          <small>
-            {evento.sender || "Mittente sconosciuto"} ·{" "}
-            {condomini.find((c) => c.id === evento.condominio_id)?.nome ||
-              "Nessun condominio associato"}{" "}
-            · {new Date(evento.created_at).toLocaleString("it-IT")}
-          </small>
+        <select
+          value={evento.priority || "media"}
+          onChange={(e) =>
+            setCommunicationEvents((prev) =>
+              prev.map((item) =>
+                item.id === evento.id
+                  ? { ...item, priority: e.target.value }
+                  : item
+              )
+            )
+          }
+        >
+          <option value="bassa">Bassa</option>
+          <option value="media">Media</option>
+          <option value="alta">Alta</option>
+        </select>
 
-          {!ticketGiaCreato && (
-            <div className="communication-actions">
-              <button
-                className="secondary small"
-                onClick={() => creaTicketDaCommunicationEvent(evento)}
-              >
-                Crea ticket
-              </button>
-            </div>
-          )}
+        <div className="communication-actions">
+          <button
+            className="secondary small"
+            onClick={() => modificaCommunicationEvent(evento)}
+          >
+            Salva
+          </button>
+
+          <button
+            className="danger-button small"
+            onClick={() => setEditingCommunicationId(null)}
+          >
+            Annulla
+          </button>
         </div>
       </div>
+    </>
+  ) : (
+    <>
+      <span className={`communication-channel ${evento.channel}`}>
+        {evento.channel}
+      </span>
+
+      <div>
+        <strong>{evento.subject || "Senza oggetto"}</strong>
+
+        <span className={`communication-priority ${evento.priority || "media"}`}>
+          Priorità {evento.priority || "media"}
+        </span>
+
+        {(evento.status === "ticket_created" || evento.linked_ticket_id) && (
+          <span className="communication-managed-badge">
+            Ticket creato
+          </span>
+        )}
+
+        <p>{evento.body || "Nessun contenuto disponibile."}</p>
+
+        <small>
+          {evento.sender || "Mittente sconosciuto"} ·{" "}
+          {condomini.find((c) => c.id === evento.condominio_id)?.nome ||
+            "Nessun condominio associato"}{" "}
+          · {new Date(evento.created_at).toLocaleString("it-IT")}
+        </small>
+
+        <div className="communication-actions">
+          {evento.status !== "ticket_created" && !evento.linked_ticket_id && (
+            <button
+              className="secondary small"
+              onClick={() => creaTicketDaCommunicationEvent(evento)}
+            >
+              Crea ticket
+            </button>
+          )}
+
+          <button
+            className="secondary small"
+            onClick={() => setEditingCommunicationId(evento.id)}
+          >
+            Modifica
+          </button>
+
+          <button
+            className="danger-button small"
+            onClick={() => eliminaCommunicationEvent(evento.id)}
+          >
+            Elimina
+          </button>
+        </div>
+      </div>
+    </>
+  )}
+</div>
       )
     })
   )}
