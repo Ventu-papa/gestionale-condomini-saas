@@ -20,9 +20,11 @@ function App() {
   const [user, setUser] = useState<any>(null)
   const [ricercaTimeline, setRicercaTimeline] = useState("")
   const [ricercaCondomini, setRicercaCondomini] = useState("")
+  const [communicationEvents, setCommunicationEvents] = useState<any[]>([])
   const [showImportReport, setShowImportReport] = useState(false)
   // Ricerca globale usata nella dashboard
   const [ricercaGlobale, setRicercaGlobale] = useState("")
+  const [gestionaleAttivo, setGestionaleAttivo] = useState<any>(null)
   const [page, setPage] = useState<Page>("home")
   const [showGestionaleModal, setShowGestionaleModal] = useState(false)
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
@@ -107,11 +109,66 @@ function App() {
   }
 }, [])
 
+
+
+useEffect(() => {
+  async function caricaGestionaleAttivo() {
+    if (!user) {
+      setGestionaleAttivo(null)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from("gestionale_connections")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_primary", true)
+      .maybeSingle()
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setGestionaleAttivo(data)
+  }
+
+  caricaGestionaleAttivo()
+}, [user])
+
 useEffect(() => {
   setAnteprimaImport([])
   setErroriImport([])
   setDuplicatiImport([])
 }, [user?.id])
+
+// ===============================
+// CARICAMENTO COMMUNICATION EVENTS
+// ===============================
+
+useEffect(() => {
+  async function caricaCommunicationEvents() {
+    if (!user) {
+      setCommunicationEvents([])
+      return
+    }
+
+    const { data, error } = await supabase
+      .from("communication_events")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setCommunicationEvents((data ?? []).filter((item) => item != null))
+  }
+
+  caricaCommunicationEvents()
+}, [user])
 
 // ===============================
 // CARICAMENTO CONFIGURAZIONE STUDIO
@@ -824,6 +881,42 @@ async function eliminaTicket(idTicket: number) {
   )
 }
 
+async function eliminaTicketGlobale(ticketDaEliminare: any) {
+  const condominio = condomini.find(
+    (c) => c.nome === ticketDaEliminare.condominio
+  )
+
+  if (!condominio) {
+    alert("Condominio non trovato.")
+    return
+  }
+
+  const conferma = confirm("Vuoi eliminare questo ticket?")
+  if (!conferma) return
+
+  const ticketAggiornati = (condominio.ticket ?? []).filter(
+    (ticket) => ticket.id !== ticketDaEliminare.id
+  )
+
+  const { error } = await supabase
+    .from("condomini")
+    .update({ ticket: ticketAggiornati })
+    .eq("id", condominio.id)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setCondomini((prev) =>
+    prev.map((c) =>
+      c.id === condominio.id
+        ? { ...c, ticket: ticketAggiornati }
+        : c
+    )
+  )
+}
+
   // ===============================
   // IMPIANTI: AGGIUNTA / MODIFICA / ELIMINA
   // ===============================
@@ -942,6 +1035,57 @@ async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
   }
 
   alert("Gestionale principale salvato correttamente.")
+  setGestionaleAttivo({
+  provider,
+  api_key: apiKey,
+  connection_mode: provider === "excel" ? "file" : "api",
+  status: apiKey || provider === "excel" ? "connected" : "not_connected",
+  is_primary: true,
+  last_sync_at: null,
+})
+}
+
+// ===============================
+// DISCONNESSIONE GESTIONALE
+// ===============================
+
+async function scollegaGestionale() {
+  if (!user || !gestionaleAttivo) return
+
+  const conferma = confirm(
+    "Vuoi scollegare il gestionale principale?"
+  )
+
+  if (!conferma) return
+
+  const { error } = await supabase
+    .from("gestionale_connections")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("provider", gestionaleAttivo.provider)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  setGestionaleAttivo(null)
+
+  alert("Gestionale scollegato correttamente.")
+}
+
+async function sincronizzaGestionaleAttivo() {
+  if (!gestionaleAttivo) {
+    alert("Nessun gestionale collegato.")
+    return
+  }
+
+  if (gestionaleAttivo.provider === "danea") {
+    await sincronizzaDanea()
+    return
+  }
+
+  alert("Sincronizzazione non ancora disponibile per questo gestionale.")
 }
 
   // ===============================
@@ -1302,6 +1446,240 @@ async function confermaImportCondomini() {
 
   setShowModal(false)
 }
+
+// ===============================
+// TEST CREAZIONE COMMUNICATION EVENT
+// ===============================
+
+async function creaCommunicationEventTest() {
+  if (!user) return
+
+  const testoCompleto = `
+    Richiesta intervento urgente
+    Segnalata infiltrazione nel condominio.
+  `.toLowerCase()
+
+  let priority = "media"
+
+  if (
+    testoCompleto.includes("urgente") ||
+    testoCompleto.includes("allagamento") ||
+    testoCompleto.includes("infiltrazione") ||
+    testoCompleto.includes("bloccato")
+  ) {
+    priority = "alta"
+  }
+
+  const { data, error } = await supabase
+    .from("communication_events")
+    .insert([
+      {
+        user_id: user.id,
+        condominio_id: condomini[0]?.id ?? null,
+        channel: "email",
+        direction: "inbound",
+        sender: "fornitore@test.it",
+        subject: "Richiesta intervento urgente",
+        body: "Segnalata infiltrazione nel condominio.",
+        priority,
+      },
+    ])
+    .select()
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  if (data) {
+    const eventiCreati = data.filter((item) => item != null)
+    setCommunicationEvents((prev) => [...eventiCreati, ...prev])
+  }
+
+  alert("Communication event creato.")
+}
+
+// ===============================
+// CREA TICKET DA COMMUNICATION EVENT
+// ===============================
+
+async function creaTicketDaCommunicationEvent(evento: any) {
+  if (!user) return
+
+  if (evento.status === "ticket_created" || evento.linked_ticket_id) {
+    alert("Per questa comunicazione è già stato creato un ticket.")
+    return
+  }
+
+  const { data: eventoRows, error: eventoLoadError } = await supabase
+    .from("communication_events")
+    .select("*")
+    .eq("id", evento.id)
+    .eq("user_id", user.id)
+    .limit(1)
+
+  if (eventoLoadError) {
+    alert(eventoLoadError.message)
+    return
+  }
+
+  const eventoAggiornato = eventoRows?.[0]
+
+  if (!eventoAggiornato) {
+    alert("Communication event non trovato.")
+    return
+  }
+
+  if (
+    eventoAggiornato.status === "ticket_created" ||
+    eventoAggiornato.linked_ticket_id
+  ) {
+    setCommunicationEvents((prev) =>
+      prev.map((item) =>
+        item.id === eventoAggiornato.id
+          ? {
+              ...item,
+              status: eventoAggiornato.status,
+              linked_ticket_id: eventoAggiornato.linked_ticket_id,
+            }
+          : item
+      )
+    )
+    alert("Per questa comunicazione è già stato creato un ticket.")
+    return
+  }
+
+  const nuovoTicket: Ticket = {
+      id: Date.now(),
+      titolo: eventoAggiornato.subject || "Nuova segnalazione",
+      descrizione: eventoAggiornato.body || "",
+      stato: "Aperto",
+      priorita:
+        eventoAggiornato.priority === "alta"
+          ? "Alta"
+          : eventoAggiornato.priority === "bassa"
+            ? "Bassa"
+            : "Media",
+      data: new Date().toISOString(),
+    }
+
+  if (!eventoAggiornato.condominio_id) {
+    alert("Nessun condominio associato.")
+    return
+  }
+
+  const condominio =
+    condomini.find((c) => c.id === eventoAggiornato.condominio_id) ??
+    (selectedCondominio?.id === eventoAggiornato.condominio_id
+      ? selectedCondominio
+      : null)
+
+  if (!condominio) {
+    alert("Condominio non trovato.")
+    return
+  }
+  const { error: eventoError } = await supabase
+    .from("communication_events")
+    .update({
+      status: "ticket_created",
+      linked_ticket_id: nuovoTicket.id,
+    })
+    .eq("user_id", user.id)
+    .eq("id", eventoAggiornato.id)
+    .is("linked_ticket_id", null)
+    .neq("status", "ticket_created")
+
+  if (eventoError) {
+    alert(eventoError.message)
+    return
+  }
+
+  const { data: latestEventRows, error: latestEventError } = await supabase
+    .from("communication_events")
+    .select("*")
+    .eq("id", eventoAggiornato.id)
+    .eq("user_id", user.id)
+    .limit(1)
+
+  if (latestEventError) {
+    alert(latestEventError.message)
+    return
+  }
+
+  const eventoConTicket = latestEventRows?.[0]
+
+  if (
+    !eventoConTicket ||
+    eventoConTicket.status !== "ticket_created" ||
+    eventoConTicket.linked_ticket_id !== nuovoTicket.id
+  ) {
+    if (eventoConTicket) {
+      setCommunicationEvents((prev) =>
+        prev.map((item) =>
+          item.id === eventoConTicket.id
+            ? { ...item, ...eventoConTicket }
+            : item
+        )
+      )
+    }
+
+    alert("Impossibile associare il ticket a questa comunicazione.")
+    return
+  }
+
+  const ticketPrecedenti = condominio.ticket ?? []
+  const ticketAggiornati = [nuovoTicket, ...ticketPrecedenti]
+
+  const { data: condominioRows, error: ticketError } = await supabase
+    .from("condomini")
+    .update({ ticket: ticketAggiornati })
+    .eq("id", condominio.id)
+    .eq("user_id", user.id)
+    .select("id")
+
+  if (ticketError || !condominioRows?.length) {
+    await supabase
+      .from("communication_events")
+      .update({
+        status: eventoAggiornato.status,
+        linked_ticket_id: eventoAggiornato.linked_ticket_id,
+      })
+      .eq("id", eventoAggiornato.id)
+      .eq("user_id", user.id)
+
+    alert(ticketError?.message ?? "Impossibile salvare il ticket nel condominio.")
+    return
+  }
+
+  const condominioAggiornato = {
+    ...condominio,
+    ticket: ticketAggiornati,
+  }
+
+  setCondomini((prev) =>
+    prev.map((c) => (c.id === condominio.id ? condominioAggiornato : c))
+  )
+
+  setSelectedCondominio((prev) =>
+    prev && prev.id === condominio.id
+      ? { ...prev, ticket: ticketAggiornati }
+      : prev
+  )
+
+  setCommunicationEvents((prev) =>
+    prev.map((item) =>
+      item.id === eventoConTicket.id
+        ? {
+            ...item,
+            ...eventoConTicket,
+          }
+        : item
+    )
+  )
+
+  alert("Ticket creato dalla comunicazione.")
+}
+
   if (!user) {
   return <LoginPage form={loginForm} setForm={setLoginForm} />
 }
@@ -2339,6 +2717,14 @@ if (page === "ticket") {
                     {ticket.stato} · {ticket.condominio} · {ticket.indirizzo} ·{" "}
                     {new Date(ticket.data).toLocaleString("it-IT")}
                   </small>
+                  <div className="document-actions">
+                    <button
+                      className="danger-button small"
+                      onClick={() => eliminaTicketGlobale(ticket)}
+                    >
+                      Elimina
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -2755,6 +3141,161 @@ if (page === "documenti") {
         </section>
     )
   }
+
+  if (page === "integrazioni") {
+  return renderSaasLayout(
+    <section className="page-view">
+      <p className="eyebrow">Connessioni</p>
+      <h1>Integrazioni</h1>
+
+      <p className="subtitle">
+        Gestisci il gestionale principale collegato allo studio.
+      </p>
+
+      <div className="dashboard-card integration-card">
+        <div>
+          <span className="eyebrow">Gestionale principale</span>
+
+          <h2>
+            {gestionaleAttivo
+              ? gestionaleAttivo.provider.toUpperCase()
+              : "Nessun gestionale collegato"}
+          </h2>
+
+          <p>
+            {gestionaleAttivo
+              ? `Stato: ${gestionaleAttivo.status} · Modalità: ${gestionaleAttivo.connection_mode}`
+              : "Collega Danea, TeamSystem o Zucchetti per iniziare la sincronizzazione."}
+          </p>
+
+          <p>
+            Ultima sincronizzazione:{" "}
+            {gestionaleAttivo?.last_sync_at
+              ? new Date(gestionaleAttivo.last_sync_at).toLocaleString("it-IT")
+              : "Mai eseguita"}
+          </p>
+          <div className="integration-status-row">
+            <span
+              className={`integration-status-badge ${
+                gestionaleAttivo?.status === "connected"
+                  ? "connected"
+                  : "disconnected"
+              }`}
+            >
+              {gestionaleAttivo?.status === "connected"
+                ? "Connesso"
+                : "Non collegato"}
+            </span>
+
+            {gestionaleAttivo && (
+              <button
+                className="danger-button"
+                onClick={scollegaGestionale}
+              >
+                Scollega
+              </button>
+            )}
+
+            {gestionaleAttivo && (
+              <button
+                className="premium-save-button integration-button"
+                onClick={sincronizzaGestionaleAttivo}
+              >
+                Sincronizza ora
+              </button>
+            )}
+          </div>
+        </div>
+
+        <button
+          className="premium-save-button integration-button"
+          onClick={() => setShowGestionaleModal(true)}
+        >
+          {gestionaleAttivo ? "Cambia gestionale" : "Collega gestionale"}
+        </button>
+      </div>
+
+<div className="dashboard-card">
+  <div>
+    <span className="eyebrow">Communication Engine</span>
+
+    <h2>Timeline comunicazioni</h2>
+
+    <p>
+      Motore centrale per email, PEC, WhatsApp e comunicazioni AI.
+    </p>
+
+    <p>
+      Eventi salvati: {communicationEvents.length}
+    </p>
+  </div>
+
+  <div className="communication-timeline">
+  {communicationEvents.length === 0 ? (
+    <div className="empty-state">
+      Nessuna comunicazione registrata.
+    </div>
+  ) : (
+    communicationEvents.slice(0, 8).map((evento) => {
+      const ticketGiaCreato =
+        evento.status === "ticket_created" || Boolean(evento.linked_ticket_id)
+      const priorityEvento = evento.priority || "media"
+
+      return (
+      <div className="communication-row" key={evento.id}>
+        <span className={`communication-channel ${evento.channel}`}>
+          {evento.channel}
+        </span>
+
+        <div>
+          <strong>{evento.subject || "Senza oggetto"}</strong>
+          <span className={`communication-priority ${priorityEvento}`}>
+            Priorità {priorityEvento}
+          </span>
+
+          {ticketGiaCreato && (
+            <span className="communication-managed-badge">
+              Ticket creato
+            </span>
+          )}
+
+          <p>{evento.body || "Nessun contenuto disponibile."}</p>
+
+          <small>
+            {evento.sender || "Mittente sconosciuto"} ·{" "}
+            {condomini.find((c) => c.id === evento.condominio_id)?.nome ||
+              "Nessun condominio associato"}{" "}
+            · {new Date(evento.created_at).toLocaleString("it-IT")}
+          </small>
+
+          {!ticketGiaCreato && (
+            <div className="communication-actions">
+              <button
+                className="secondary small"
+                onClick={() => creaTicketDaCommunicationEvent(evento)}
+              >
+                Crea ticket
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      )
+    })
+  )}
+</div>
+
+  <button
+    className="premium-save-button"
+    onClick={creaCommunicationEventTest}
+  >
+    Genera evento test
+  </button>
+</div>
+
+    </section>
+  )
+}
 
   if (page !== "home") {
     return renderSaasLayout(

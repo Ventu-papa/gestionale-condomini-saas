@@ -16,6 +16,7 @@ const items = [
   { id: "documenti", label: "Documenti" },
   { id: "timelineGlobale", label: "Timeline" },
   { id: "scadenze", label: "Scadenze" },
+  { id: "integrazioni", label: "Integrazioni" },
 ]
 
 export default function Sidebar({

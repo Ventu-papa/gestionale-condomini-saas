@@ -8,6 +8,7 @@ export type Page =
   | "timeline"
   | "documenti"
   | "ticket"
+  | "integrazioni"
 
 export type TimelineEvent = {
   id: number
