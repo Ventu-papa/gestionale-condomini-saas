@@ -46,6 +46,8 @@ export type Documento = {
   note: string
   file_path?: string
   file_name?: string
+  mime_type?: string
+  file_size?: number
 }
 
 // ===============================
