@@ -2399,3 +2399,53 @@ option {
 .documentale-filters select {
   min-height: 48px;
 }  
+
+.documento-ocr-badge {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.documento-ocr-badge.pending {
+  color: #ffb45c;
+  background: rgba(255, 132, 0, 0.12);
+}
+
+.documento-ocr-badge.completed {
+  color: #7cffb2;
+  background: rgba(47, 255, 134, 0.12);
+}
+
+.documento-ocr-badge.failed {
+  color: #ff7c7c;
+  background: rgba(255, 70, 70, 0.12);
+}
+
+.documento-ocr-badge.processing {
+  color: #7cc7ff;
+  background: rgba(80, 170, 255, 0.12);
+}
+
+.documento-ai-summary {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 132, 0, 0.08);
+  border: 1px solid rgba(255, 132, 0, 0.16);
+}
+
+.documento-ai-summary strong {
+  font-size: 12px;
+  color: #ff9f2f;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.documento-ai-summary p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.68);
+}

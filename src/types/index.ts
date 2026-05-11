@@ -48,6 +48,12 @@ export type Documento = {
   file_name?: string
   mime_type?: string
   file_size?: number
+  ocr_text?: string
+  ocr_status?: "pending" | "processing" | "completed" | "failed"
+  ai_category?: string
+  ai_summary?: string
+  ai_extracted_dates?: string[]
+  ai_extracted_amounts?: string[]
 }
 
 // ===============================

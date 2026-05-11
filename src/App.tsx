@@ -1325,6 +1325,12 @@ function chiudiPreviewDocumento() {
         file_name: fileName,
         mime_type: mimeType,
         file_size: fileSize,
+        ocr_status: filePath ? "pending" : undefined,
+        ocr_text: "",
+        ai_category: "",
+        ai_summary: "",
+        ai_extracted_dates: [],
+        ai_extracted_amounts: [],
       },
       ...documentiAttuali,
     ]
@@ -1403,6 +1409,12 @@ const condominioTarget = condomini.find(
       file_name: fileName,
       mime_type: mimeType,
       file_size: fileSize,
+      ocr_status: filePath ? "pending" : undefined,
+      ocr_text: "",
+      ai_category: "",
+      ai_summary: "",
+      ai_extracted_dates: [],
+      ai_extracted_amounts: [],
     },
     ...documentiAttuali,
   ]
@@ -1474,6 +1486,85 @@ const condominioTarget = condomini.find(
     )
     setEditingDocumentoId(null)
   }
+
+  async function analizzaDocumentoMock(documentoDaAnalizzare: any) {
+  const condominio = condomini.find(
+    (c) => Number(c.id) === Number(documentoDaAnalizzare.condominio_id)
+  )
+
+  if (!condominio) {
+    alert("Condominio non trovato per questo documento.")
+    return
+  }
+
+  const documentiProcessing = (condominio.documenti ?? []).map((documento) =>
+    documento.id === documentoDaAnalizzare.id
+      ? {
+          ...documento,
+          ocr_status: "processing" as const,
+        }
+      : documento
+  )
+
+  const { error: processingError } = await supabase
+    .from("condomini")
+    .update({ documenti: documentiProcessing })
+    .eq("id", condominio.id)
+
+  if (processingError) {
+    alert(processingError.message)
+    return
+  }
+
+  setCondomini((prev) =>
+    prev.map((c) =>
+      c.id === condominio.id ? { ...c, documenti: documentiProcessing } : c
+    )
+  )
+
+  setTimeout(async () => {
+    const documentiCompletati = documentiProcessing.map((documento) =>
+      documento.id === documentoDaAnalizzare.id
+        ? {
+            ...documento,
+            ocr_status: "completed" as const,
+            ocr_text:
+              "Testo OCR simulato: documento analizzato correttamente. Sono stati individuati dati rilevanti, date operative e possibili importi.",
+            ai_category: documento.categoria || "Documento operativo",
+            ai_summary:
+              "Documento analizzato automaticamente. Il sistema ha rilevato contenuti utili per archivio, ricerca e future automazioni operative.",
+            ai_extracted_dates: [
+              new Date().toISOString().slice(0, 10),
+            ],
+            ai_extracted_amounts: ["€ 0,00"],
+          }
+        : documento
+    )
+
+    const { error } = await supabase
+      .from("condomini")
+      .update({ documenti: documentiCompletati })
+      .eq("id", condominio.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setCondomini((prev) =>
+      prev.map((c) =>
+        c.id === condominio.id ? { ...c, documenti: documentiCompletati } : c
+      )
+    )
+
+    if (selectedCondominio?.id === condominio.id) {
+      setSelectedCondominio({
+        ...condominio,
+        documenti: documentiCompletati,
+      })
+    }
+  }, 1200)
+}
 
   // Elimina il record documento e, se presente, anche il file collegato.
   async function eliminaDocumento(documento: Documento) {
@@ -2239,6 +2330,7 @@ const condominioTarget = condomini.find(
     .flatMap((condominio) =>
       (condominio.documenti ?? []).map((documento) => ({
         ...documento,
+        condominio_id: condominio.id,
         condominio: condominio.nome,
         indirizzo: condominio.indirizzo,
       }))
@@ -3437,7 +3529,11 @@ const condominioTarget = condomini.find(
               >
                 <div className="documento-premium-header">
                   <span className="documento-badge">{documento.categoria}</span>
-
+                  {documento.ocr_status ? (
+                    <span className={`documento-ocr-badge ${documento.ocr_status}`}>
+                      OCR {documento.ocr_status}
+                    </span>
+                  ) : null}
                   <span className="documento-file-type">
                     {documento.file_name?.split(".").pop()?.toUpperCase() || "FILE"}
                   </span>
@@ -3460,10 +3556,23 @@ const condominioTarget = condomini.find(
                       {(documento.file_size / 1024 / 1024).toFixed(2)} MB
                     </small>
                   ) : null}
+                  {documento.ai_summary ? (
+                    <div className="documento-ai-summary">
+                      <strong>AI Summary</strong>
+                      <p>{documento.ai_summary}</p>
+                    </div>
+                  ) : null}
                 </div>
 
                 {documento.file_path ? (
                   <div className="document-actions">
+                    <button
+                      className="secondary small"
+                      onClick={() => analizzaDocumentoMock(documento)}
+                      disabled={documento.ocr_status === "processing"}
+                    >
+                      {documento.ocr_status === "processing" ? "Analisi..." : "Analizza AI"}
+                    </button>
                     <button
                       className="secondary small"
                       onClick={() => apriPreviewDocumento(documento)}
