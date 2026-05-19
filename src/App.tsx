@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import * as XLSX from "xlsx"
@@ -24,6 +24,7 @@ import LoginPage from "./components/LoginPage"
 import Dashboard from "./components/Dashboard"
 import Sidebar from "./components/sidebar"
 import OnboardingPage from "./components/onboarding-page"
+import { useToast } from "./hooks/useToast"
 
 import "./App.css"
 
@@ -110,61 +111,10 @@ type FornitoreForm = {
   condominio_id: number | ""
 }
 
-type ToastNotification = {
-  id: number
-  tipo: "success" | "error" | "warning" | "info"
-  titolo: string
-  messaggio: string
-}
-
 function creaIdLocale() {
   return Date.now()
 }
 
-function classificaNotificaDaMessaggio(message: string): ToastNotification["tipo"] {
-  const testo = message.toLowerCase()
-
-  if (
-    testo.includes("errore") ||
-    testo.includes("impossibile") ||
-    testo.includes("non riuscit") ||
-    testo.includes("failed") ||
-    testo.includes("error")
-  ) {
-    return "error"
-  }
-
-  if (
-    testo.includes("inserisci") ||
-    testo.includes("nessun") ||
-    testo.includes("non trovato") ||
-    testo.includes("gia") ||
-    testo.includes("già") ||
-    testo.includes("non ancora")
-  ) {
-    return "warning"
-  }
-
-  if (
-    testo.includes("correttamente") ||
-    testo.includes("salvato") ||
-    testo.includes("creato") ||
-    testo.includes("importat") ||
-    testo.includes("collegato") ||
-    testo.includes("scollegato")
-  ) {
-    return "success"
-  }
-
-  return "info"
-}
-
-function titoloNotifica(tipo: ToastNotification["tipo"]) {
-  if (tipo === "success") return "Operazione completata"
-  if (tipo === "error") return "Qualcosa non ha funzionato"
-  if (tipo === "warning") return "Attenzione"
-  return "Nota operativa"
-}
 
 const MAX_DOCUMENTO_BYTES = 20 * 1024 * 1024
 const ESTENSIONI_DOCUMENTO_CONSENTITE = new Set([
@@ -310,6 +260,8 @@ function statoImpianto(impianto: Impianto) {
 }
 
 function App() {
+  const { showError, showSuccess, showWarning, showInfo } = useToast()
+
   // ============================================================
   // STATO: SESSIONE, ONBOARDING E NAVIGAZIONE
   // Gestisce l'utente autenticato, il completamento onboarding,
@@ -400,44 +352,6 @@ function App() {
     message: "",
     onConfirm: null,
   })
-  const [notificheToast, setNotificheToast] = useState<ToastNotification[]>([])
-
-  const chiudiNotifica = useCallback((id: number) => {
-    setNotificheToast((prev) => prev.filter((notifica) => notifica.id !== id))
-  }, [])
-
-  const mostraNotifica = useCallback(
-    (
-      messaggio: unknown,
-      tipo?: ToastNotification["tipo"],
-      titolo?: string
-    ) => {
-      const testo =
-        typeof messaggio === "string"
-          ? messaggio
-          : messaggio instanceof Error
-            ? messaggio.message
-            : String(messaggio ?? "")
-      const tipoNotifica = tipo ?? classificaNotificaDaMessaggio(testo)
-      const id = Date.now() + Math.floor(Math.random() * 1000)
-
-      setNotificheToast((prev) => [
-        ...prev.slice(-3),
-        {
-          id,
-          tipo: tipoNotifica,
-          titolo: titolo ?? titoloNotifica(tipoNotifica),
-          messaggio: testo,
-        },
-      ])
-
-      window.setTimeout(() => {
-        chiudiNotifica(id)
-      }, 5200)
-    },
-    [chiudiNotifica]
-  )
-
   // ============================================================
   // STATO: DATI PRINCIPALI E FORM
   // Contiene condomini caricati da Supabase e valori temporanei
@@ -508,18 +422,6 @@ function App() {
     note: "",
   })
 
-  useEffect(() => {
-    const alertNativo = window.alert
-
-    window.alert = (messaggio?: unknown) => {
-      mostraNotifica(messaggio)
-    }
-
-    return () => {
-      window.alert = alertNativo
-    }
-  }, [mostraNotifica])
-
   // ============================================================
   // EFFECT: AUTENTICAZIONE
   // Recupera l'utente corrente e mantiene lo stato aggiornato quando
@@ -554,6 +456,7 @@ function App() {
   // ============================================================
   useEffect(() => {
     localStorage.setItem("temaInterfaccia", temaInterfaccia)
+    document.documentElement.dataset.theme = temaInterfaccia
   }, [temaInterfaccia])
 
   // ============================================================
@@ -575,7 +478,7 @@ function App() {
         .maybeSingle()
 
       if (error) {
-        alert(error.message)
+        showError(error.message)
         return
       }
 
@@ -583,7 +486,7 @@ function App() {
     }
 
     caricaGestionaleAttivo()
-  }, [user])
+  }, [showError, user])
 
   // ============================================================
   // EFFECT: COMMUNICATION EVENTS
@@ -603,7 +506,7 @@ function App() {
         .order("created_at", { ascending: false })
 
       if (error) {
-        alert(error.message)
+        showError(error.message)
         return
       }
 
@@ -611,7 +514,7 @@ function App() {
     }
 
     caricaCommunicationEvents()
-  }, [user])
+  }, [showError, user])
 
   // ============================================================
   // EFFECT: CONFIGURAZIONE STUDIO
@@ -634,7 +537,7 @@ function App() {
         .single()
 
       if (error && error.code !== "PGRST116") {
-        alert(error.message)
+        showError(error.message)
         setCaricamentoOnboarding(false)
         return
       }
@@ -644,7 +547,7 @@ function App() {
     }
 
     caricaStudioSettings()
-  }, [user])
+  }, [showError, user])
 
   // ============================================================
   // EFFECT: CONDOMINI UTENTE
@@ -665,7 +568,7 @@ function App() {
         .order("created_at", { ascending: false })
 
       if (error) {
-        alert(error.message)
+        showError(error.message)
         return
       }
 
@@ -674,7 +577,7 @@ function App() {
     }
 
     caricaCondominiUtente()
-  }, [user])
+  }, [showError, user])
 
   // ============================================================
   // EFFECT: FORNITORI UTENTE
@@ -694,7 +597,7 @@ function App() {
         .order("created_at", { ascending: false })
 
       if (error) {
-        alert(error.message)
+        showError(error.message)
         return
       }
 
@@ -702,42 +605,12 @@ function App() {
     }
 
     caricaFornitoriUtente()
-  }, [user])
+  }, [showError, user])
 
   // ============================================================
   // UI: LAYOUT E CONFERME
   // Funzioni di supporto usate da tutte le pagine autenticate.
   // ============================================================
-
-  function renderNotificheToast() {
-    if (notificheToast.length === 0) return null
-
-    return (
-      <div className="toast-stack" aria-live="polite" aria-atomic="false">
-        {notificheToast.map((notifica) => (
-          <div
-            className={`toast-notification ${notifica.tipo}`}
-            key={notifica.id}
-            role="status"
-          >
-            <div>
-              <strong>{notifica.titolo}</strong>
-              <p>{notifica.messaggio}</p>
-            </div>
-
-            <button
-              className="toast-close"
-              type="button"
-              aria-label="Chiudi notifica"
-              onClick={() => chiudiNotifica(notifica.id)}
-            >
-              x
-            </button>
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   function selezionaFileDocumento(file?: File | null) {
     if (!file) {
@@ -748,7 +621,7 @@ function App() {
     const errore = validaFileDocumento(file)
 
     if (errore) {
-      alert(errore)
+      showWarning(errore)
       setFileDocumento(null)
       return
     }
@@ -1112,7 +985,6 @@ function App() {
           </div>
         )}
 
-        {renderNotificheToast()}
       </main>
     )
   }
@@ -1132,7 +1004,7 @@ function App() {
     })
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1155,12 +1027,12 @@ function App() {
       )
 
       if (error) {
-        alert(`Errore sincronizzazione Danea: ${error.message}`)
+        showError(`Errore sincronizzazione Danea: ${error.message}`)
         return false
       }
 
       if (!data?.success) {
-        alert(data?.message ?? "Sincronizzazione Danea non riuscita.")
+        showWarning(data?.message ?? "Sincronizzazione Danea non riuscita.")
         return false
       }
 
@@ -1171,7 +1043,7 @@ function App() {
             }.`
           : ""
 
-      alert(`${data.message}${riepilogo}`)
+      showSuccess(`${data.message}${riepilogo}`)
 
       if (user) {
         const { data: condominiAggiornati } = await supabase
@@ -1196,7 +1068,7 @@ function App() {
 
       return true
     } catch (error) {
-      alert(
+      showError(
         error instanceof Error
           ? error.message
           : "Errore sconosciuto durante la sincronizzazione"
@@ -1213,14 +1085,14 @@ function App() {
     if (!user) return false
 
     if (provider !== "danea" && provider !== "excel") {
-      alert("Per ora e' disponibile solo il collegamento Danea Domustudio.")
+      showWarning("Per ora e' disponibile solo il collegamento Danea Domustudio.")
       return false
     }
 
     const apiKeyPulita = apiKey.trim()
 
     if (provider === "danea" && !apiKeyPulita) {
-      alert("Inserisci la APIKey di Domustudio Cloud Pro.")
+      showWarning("Inserisci la APIKey di Domustudio Cloud Pro.")
       return false
     }
 
@@ -1230,7 +1102,7 @@ function App() {
       .eq("user_id", user.id)
 
     if (resetError) {
-      alert(resetError.message)
+      showError(resetError.message)
       return false
     }
 
@@ -1251,7 +1123,7 @@ function App() {
     )
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return false
     }
 
@@ -1270,7 +1142,7 @@ function App() {
       return await sincronizzaDanea()
     }
 
-    alert("Gestionale principale salvato correttamente.")
+    showSuccess("Gestionale principale salvato correttamente.")
     return true
   }
 
@@ -1289,12 +1161,12 @@ function App() {
           .eq("provider", gestionaleAttivo.provider)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
         setGestionaleAttivo(null)
-        alert("Gestionale scollegato correttamente.")
+        showSuccess("Gestionale scollegato correttamente.")
       }
     )
   }
@@ -1302,7 +1174,7 @@ function App() {
   // Sceglie la procedura di sincronizzazione in base al gestionale attivo.
   async function sincronizzaGestionaleAttivo() {
     if (!gestionaleAttivo) {
-      alert("Nessun gestionale collegato.")
+      showWarning("Nessun gestionale collegato.")
       return
     }
 
@@ -1311,7 +1183,7 @@ function App() {
       return
     }
 
-    alert("Sincronizzazione non ancora disponibile per questo gestionale.")
+    showInfo("Sincronizzazione non ancora disponibile per questo gestionale.")
   }
 
   // ============================================================
@@ -1347,7 +1219,7 @@ function App() {
       .select()
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1383,7 +1255,7 @@ function App() {
       .eq("id", condominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1399,7 +1271,7 @@ function App() {
         const { error } = await supabase.from("condomini").delete().eq("id", id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -1441,7 +1313,7 @@ function App() {
     })
 
     if (indiceHeader === -1) {
-      alert("Impossibile trovare le intestazioni corrette nel file Excel.")
+      showWarning("Impossibile trovare le intestazioni corrette nel file Excel.")
       return
     }
 
@@ -1460,7 +1332,7 @@ function App() {
       .eq("user_id", user.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1568,7 +1440,7 @@ function App() {
     }
 
     if (validi.length === 0) {
-      alert("Nessun nuovo condominio valido da importare.")
+      showWarning("Nessun nuovo condominio valido da importare.")
     }
   }
 
@@ -1577,7 +1449,7 @@ function App() {
     if (!user) return
 
     if (anteprimaImport.length === 0) {
-      alert("Non ci sono condomìni validi da importare.")
+      showWarning("Non ci sono condomini validi da importare.")
       return
     }
 
@@ -1591,7 +1463,7 @@ function App() {
     setImportInCorso(false)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1599,7 +1471,7 @@ function App() {
       setCondomini((prev) => [...data, ...prev])
     }
 
-    alert(`${anteprimaImport.length} condomìni importati correttamente.`)
+    showSuccess(`${anteprimaImport.length} condomini importati correttamente.`)
 
     setAnteprimaImport([])
     setErroriImport([])
@@ -1630,7 +1502,7 @@ function App() {
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1669,7 +1541,7 @@ function App() {
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1703,7 +1575,7 @@ function App() {
           .eq("id", selectedCondominio.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -1732,7 +1604,7 @@ function App() {
       .createSignedUrl(filePath, 60)
 
     if (error || !data?.signedUrl) {
-      alert("Errore apertura documento")
+      showError("Errore apertura documento.")
       return
     }
 
@@ -1751,7 +1623,7 @@ function App() {
 
   async function apriPreviewDocumento(documento: Documento) {
   if (!documento.file_path) {
-    alert("Nessun file collegato a questo documento")
+    showWarning("Nessun file collegato a questo documento.")
     return
   }
 
@@ -1760,7 +1632,7 @@ function App() {
     .createSignedUrl(documento.file_path, 60)
 
   if (error || !data?.signedUrl) {
-    alert("Errore anteprima documento")
+    showError("Errore anteprima documento.")
     return
   }
 
@@ -1780,7 +1652,7 @@ function chiudiPreviewDocumento() {
       .download(filePath)
 
     if (error || !data) {
-      alert("Errore download documento")
+      showError("Errore download documento.")
       return
     }
 
@@ -1807,7 +1679,7 @@ function chiudiPreviewDocumento() {
       const erroreFile = validaFileDocumento(fileDocumento)
 
       if (erroreFile) {
-        alert(erroreFile)
+        showWarning(erroreFile)
         return
       }
 
@@ -1821,7 +1693,7 @@ function chiudiPreviewDocumento() {
         .upload(filePath, fileDocumento)
 
       if (uploadError) {
-        alert(uploadError.message)
+        showError(uploadError.message)
         return
       }
     }
@@ -1854,7 +1726,7 @@ function chiudiPreviewDocumento() {
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -1884,7 +1756,7 @@ const condominioTarget = condomini.find(
   (c) => Number(c.id) === Number(uploadCondominioId)
 )
   if (!condominioTarget) {
-    alert("Condominio non trovato")
+    showWarning("Condominio non trovato.")
     return
   }
 
@@ -1897,7 +1769,7 @@ const condominioTarget = condomini.find(
     const erroreFile = validaFileDocumento(fileDocumento)
 
     if (erroreFile) {
-      alert(erroreFile)
+      showWarning(erroreFile)
       return
     }
 
@@ -1911,7 +1783,7 @@ const condominioTarget = condomini.find(
       .upload(filePath, fileDocumento)
 
     if (uploadError) {
-      alert(uploadError.message)
+      showError(uploadError.message)
       return
     }
   }
@@ -1945,7 +1817,7 @@ const condominioTarget = condomini.find(
     .eq("id", condominioTarget.id)
 
   if (error) {
-    alert(error.message)
+    showError(error.message)
     return
   }
 
@@ -1991,7 +1863,7 @@ const condominioTarget = condomini.find(
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2013,7 +1885,7 @@ const condominioTarget = condomini.find(
   )
 
   if (!condominio) {
-    alert("Condominio non trovato per questo documento.")
+    showWarning("Condominio non trovato per questo documento.")
     return
   }
 
@@ -2032,7 +1904,7 @@ const condominioTarget = condomini.find(
     .eq("id", condominio.id)
 
   if (processingError) {
-    alert(processingError.message)
+    showError(processingError.message)
     return
   }
 
@@ -2073,7 +1945,7 @@ const condominioTarget = condomini.find(
       .eq("id", condominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2106,7 +1978,7 @@ const condominioTarget = condomini.find(
             .remove([documento.file_path])
 
           if (storageError) {
-            alert(storageError.message)
+            showError(storageError.message)
             return
           }
         }
@@ -2121,7 +1993,7 @@ const condominioTarget = condomini.find(
           .eq("id", selectedCondominio.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -2165,7 +2037,7 @@ const condominioTarget = condomini.find(
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2201,7 +2073,7 @@ const condominioTarget = condomini.find(
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2235,7 +2107,7 @@ const condominioTarget = condomini.find(
           .eq("id", selectedCondominio.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -2281,7 +2153,7 @@ const condominioTarget = condomini.find(
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2317,7 +2189,7 @@ const condominioTarget = condomini.find(
       .eq("id", selectedCondominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2351,7 +2223,7 @@ const condominioTarget = condomini.find(
           .eq("id", selectedCondominio.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -2375,7 +2247,7 @@ const condominioTarget = condomini.find(
     )
 
     if (!condominio) {
-      alert("Condominio non trovato.")
+      showWarning("Condominio non trovato.")
       return
     }
 
@@ -2400,7 +2272,7 @@ const condominioTarget = condomini.find(
       .eq("id", condominio.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2425,7 +2297,7 @@ const condominioTarget = condomini.find(
     )
 
     if (!condominio) {
-      alert("Condominio non trovato.")
+      showWarning("Condominio non trovato.")
       return
     }
 
@@ -2443,7 +2315,7 @@ const condominioTarget = condomini.find(
           .eq("id", condominio.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -2495,7 +2367,7 @@ const condominioTarget = condomini.find(
 
   async function creaFornitore() {
     if (!user || !fornitoreForm.nome.trim() || !fornitoreForm.cognome.trim()) {
-      alert("Inserisci almeno nome e cognome del fornitore.")
+      showWarning("Inserisci almeno nome e cognome del fornitore.")
       return
     }
 
@@ -2504,17 +2376,17 @@ const condominioTarget = condomini.find(
     const partitaIva = normalizzaPartitaIva(fornitoreForm.partita_iva)
 
     if (!telefonoItalianoValido(telefono)) {
-      alert("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
+      showWarning("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
       return
     }
 
     if (!partitaIvaValida(partitaIva)) {
-      alert("La Partita IVA deve contenere 11 cifre.")
+      showWarning("La Partita IVA deve contenere 11 cifre.")
       return
     }
 
     if (!ibanItalianoValido(iban)) {
-      alert("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
+      showWarning("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
       return
     }
 
@@ -2536,12 +2408,13 @@ const condominioTarget = condomini.find(
       .single()
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
     setFornitori((prev) => [data, ...prev])
     resetFornitoreForm()
+    showSuccess("Fornitore salvato correttamente.")
   }
 
   async function modificaFornitore(fornitoreAggiornato: Fornitore) {
@@ -2550,17 +2423,17 @@ const condominioTarget = condomini.find(
     const partitaIva = normalizzaPartitaIva(fornitoreAggiornato.partita_iva)
 
     if (!telefonoItalianoValido(telefono)) {
-      alert("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
+      showWarning("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
       return
     }
 
     if (!partitaIvaValida(partitaIva)) {
-      alert("La Partita IVA deve contenere 11 cifre.")
+      showWarning("La Partita IVA deve contenere 11 cifre.")
       return
     }
 
     if (!ibanItalianoValido(iban)) {
-      alert("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
+      showWarning("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
       return
     }
 
@@ -2579,11 +2452,12 @@ const condominioTarget = condomini.find(
       .eq("user_id", user?.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
     setEditingFornitoreId(null)
+    showSuccess("Fornitore aggiornato correttamente.")
   }
 
   async function eliminaFornitore(id: number) {
@@ -2598,11 +2472,12 @@ const condominioTarget = condomini.find(
           .eq("user_id", user?.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
         setFornitori((prev) => prev.filter((fornitore) => fornitore.id !== id))
+        showSuccess("Fornitore eliminato correttamente.")
       }
     )
   }
@@ -2649,7 +2524,7 @@ const condominioTarget = condomini.find(
       .select()
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2658,7 +2533,7 @@ const condominioTarget = condomini.find(
       setCommunicationEvents((prev) => [...eventiCreati, ...prev])
     }
 
-    alert("Communication event creato.")
+    showSuccess("Comunicazione creata.")
   }
 
   // Crea un ticket partendo da una comunicazione non ancora gestita.
@@ -2666,7 +2541,7 @@ const condominioTarget = condomini.find(
     if (!user) return
 
     if (evento.status === "ticket_created" || evento.linked_ticket_id) {
-      alert("Per questa comunicazione è già stato creato un ticket.")
+      showInfo("Per questa comunicazione e' gia' stato creato un ticket.")
       return
     }
 
@@ -2678,14 +2553,14 @@ const condominioTarget = condomini.find(
       .limit(1)
 
     if (eventoLoadError) {
-      alert(eventoLoadError.message)
+      showError(eventoLoadError.message)
       return
     }
 
     const eventoAggiornato = eventoRows?.[0]
 
     if (!eventoAggiornato) {
-      alert("Communication event non trovato.")
+      showWarning("Comunicazione non trovata.")
       return
     }
 
@@ -2704,7 +2579,7 @@ const condominioTarget = condomini.find(
             : item
         )
       )
-      alert("Per questa comunicazione è già stato creato un ticket.")
+      showInfo("Per questa comunicazione e' gia' stato creato un ticket.")
       return
     }
 
@@ -2723,7 +2598,7 @@ const condominioTarget = condomini.find(
     }
 
     if (!eventoAggiornato.condominio_id) {
-      alert("Nessun condominio associato.")
+      showWarning("Nessun condominio associato.")
       return
     }
 
@@ -2734,7 +2609,7 @@ const condominioTarget = condomini.find(
         : null)
 
     if (!condominio) {
-      alert("Condominio non trovato.")
+      showWarning("Condominio non trovato.")
       return
     }
 
@@ -2750,7 +2625,7 @@ const condominioTarget = condomini.find(
       .neq("status", "ticket_created")
 
     if (eventoError) {
-      alert(eventoError.message)
+      showError(eventoError.message)
       return
     }
 
@@ -2762,7 +2637,7 @@ const condominioTarget = condomini.find(
       .limit(1)
 
     if (latestEventError) {
-      alert(latestEventError.message)
+      showError(latestEventError.message)
       return
     }
 
@@ -2781,7 +2656,7 @@ const condominioTarget = condomini.find(
         )
       }
 
-      alert("Impossibile associare il ticket a questa comunicazione.")
+      showError("Impossibile associare il ticket a questa comunicazione.")
       return
     }
 
@@ -2805,7 +2680,7 @@ const condominioTarget = condomini.find(
         .eq("id", eventoAggiornato.id)
         .eq("user_id", user.id)
 
-      alert(ticketError?.message ?? "Impossibile salvare il ticket nel condominio.")
+      showError(ticketError?.message ?? "Impossibile salvare il ticket nel condominio.")
       return
     }
 
@@ -2835,7 +2710,7 @@ const condominioTarget = condomini.find(
       )
     )
 
-    alert("Ticket creato dalla comunicazione.")
+    showSuccess("Ticket creato dalla comunicazione.")
   }
 
   // Salva le modifiche manuali a una comunicazione.
@@ -2855,7 +2730,7 @@ const condominioTarget = condomini.find(
       .eq("user_id", user.id)
 
     if (error) {
-      alert(error.message)
+      showError(error.message)
       return
     }
 
@@ -2890,7 +2765,7 @@ const condominioTarget = condomini.find(
               .eq("id", condominio.id)
 
             if (ticketError) {
-              alert(ticketError.message)
+              showError(ticketError.message)
               return
             }
 
@@ -2909,7 +2784,7 @@ const condominioTarget = condomini.find(
           .eq("user_id", user.id)
 
         if (error) {
-          alert(error.message)
+          showError(error.message)
           return
         }
 
@@ -2925,12 +2800,7 @@ const condominioTarget = condomini.find(
   // Login, loader onboarding e pagina di configurazione iniziale.
   // ============================================================
   if (!user) {
-    return (
-      <>
-        <LoginPage form={loginForm} setForm={setLoginForm} />
-        {renderNotificheToast()}
-      </>
-    )
+    return <LoginPage form={loginForm} setForm={setLoginForm} />
   }
 
   if (caricamentoOnboarding) {
@@ -2942,7 +2812,6 @@ const condominioTarget = condomini.find(
             <h1>Preparazione studio...</h1>
           </section>
         </main>
-        {renderNotificheToast()}
       </>
     )
   }
@@ -2954,7 +2823,6 @@ const condominioTarget = condomini.find(
           onComplete={completaOnboarding}
           onConnectGestionale={salvaCollegamentoGestionale}
         />
-        {renderNotificheToast()}
       </>
     )
   }

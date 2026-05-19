@@ -1,6 +1,7 @@
 // Componente schermata login
 
 import { supabase } from "../supabase"
+import { useToast } from "../hooks/useToast"
 
 type LoginPageProps = {
   form: {
@@ -16,6 +17,8 @@ type LoginPageProps = {
 }
 
 function LoginPage({ form, setForm }: LoginPageProps) {
+  const { showError } = useToast()
+
   async function accedi() {
     const { error } = await supabase.auth.signInWithPassword({
       email: form.email.trim(),
@@ -23,7 +26,7 @@ function LoginPage({ form, setForm }: LoginPageProps) {
     })
 
     if (error) {
-      alert("Accesso non riuscito. Controlla email e password.")
+      showError("Accesso non riuscito. Controlla email e password.")
     }
   }
 
