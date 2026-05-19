@@ -4632,20 +4632,23 @@ const condominioTarget = condomini.find(
         </div>
 
         <div className="documentale-stats">
-          <div className="stat-card">
+          <div className="analytics-card documentale-stat-card">
             <span>Documenti totali</span>
-          <strong>{documentiFiltrati.length}</strong>          
+            <strong>{documentiFiltrati.length}</strong>
+            <p>File presenti nell'archivio</p>
           </div>
-          <div className="stat-card">
-            <span>Condomìni collegati</span>
+          <div className="analytics-card documentale-stat-card">
+            <span>Condomini collegati</span>
             <strong>
               {new Set(documentiGlobali.map((doc) => doc.condominio)).size}
             </strong>
+            <p>Fabbricati con documenti</p>
           </div>
 
-          <div className="stat-card">
-            <span>Archivio AI</span>
+          <div className="analytics-card documentale-stat-card">
+            <span>Archivio ready</span>
             <strong>Ready</strong>
+            <p>Ricerca e analisi attive</p>
           </div>
         </div>
 
