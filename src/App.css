@@ -443,6 +443,36 @@ option {
   flex-wrap: wrap;
 }
 
+.app-error-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 34%),
+    linear-gradient(135deg, #020617, #111827);
+  color: #f8fafc;
+}
+
+.app-error-card {
+  width: min(100%, 560px);
+  padding: 38px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.app-error-card h1 {
+  font-size: clamp(34px, 5vw, 54px);
+  margin-bottom: 16px;
+}
+
+.app-error-card p {
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
 /* ===============================
    CONDOMINI
 ================================ */
@@ -453,6 +483,13 @@ option {
   align-items: center;
   margin-bottom: 28px;
   gap: 20px;
+}
+
+.condomini-new-button {
+  width: auto;
+  min-width: 190px;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .condomini-list {

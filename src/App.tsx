@@ -381,6 +381,20 @@ function App() {
     email_notifiche: "",
   })
 
+  function resetFormCondominio() {
+    setForm({
+      tipo: "Condominio",
+      nome_condominio: "",
+      cod_fiscale: "",
+      indirizzo: "",
+      cap: "",
+      comune: "",
+      provincia: "",
+      dati_catastali: "",
+      email_notifiche: "",
+    })
+  }
+
   const [nuovoImpianto, setNuovoImpianto] = useState({
     tipo: "",
     nome: "",
@@ -639,6 +653,150 @@ function App() {
     })
   }
 
+  function apriNuovoCondominioModal() {
+    setEditingCondominioId(null)
+    resetFormCondominio()
+    setShowModal(true)
+  }
+
+  function renderNuovoCondominioModal() {
+    if (!showModal) return null
+
+    return (
+      <div className="premium-modal" role="dialog" aria-modal="true">
+        <div className="premium-modal-card">
+          <div className="modal-header">
+            <h2>Nuovo condominio</h2>
+
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Chiudi popup nuovo condominio"
+              onClick={() => setShowModal(false)}
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="premium-form-grid">
+            <label>
+              Tipo
+              <select
+                value={form.tipo}
+                onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+              >
+                <option value="Condominio">Condominio</option>
+                <option value="Supercondominio">Supercondominio</option>
+                <option value="Residence">Residence</option>
+                <option value="Centro commerciale">Centro commerciale</option>
+              </select>
+            </label>
+
+            <label>
+              Nome condominio
+              <input
+                value={form.nome_condominio}
+                onChange={(e) =>
+                  setForm({ ...form, nome_condominio: e.target.value })
+                }
+                placeholder="Es. Condominio Via Roma 12"
+              />
+            </label>
+
+            <label>
+              Codice fiscale
+              <input
+                value={form.cod_fiscale}
+                onChange={(e) =>
+                  setForm({ ...form, cod_fiscale: e.target.value })
+                }
+                placeholder="Es. 01234567890"
+              />
+            </label>
+
+            <label>
+              Indirizzo
+              <input
+                value={form.indirizzo}
+                onChange={(e) =>
+                  setForm({ ...form, indirizzo: e.target.value })
+                }
+                placeholder="Es. Via Roma 12"
+              />
+            </label>
+
+            <label>
+              CAP
+              <input
+                value={form.cap}
+                onChange={(e) => setForm({ ...form, cap: e.target.value })}
+                placeholder="Es. 40100"
+              />
+            </label>
+
+            <label>
+              Comune
+              <input
+                value={form.comune}
+                onChange={(e) =>
+                  setForm({ ...form, comune: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    creaCondominio()
+                  }
+                }}
+                placeholder="Es. Bologna"
+              />
+            </label>
+
+            <label>
+              Provincia
+              <input
+                value={form.provincia}
+                onChange={(e) =>
+                  setForm({ ...form, provincia: e.target.value })
+                }
+                placeholder="Es. BO"
+              />
+            </label>
+
+            <label>
+              Dati catastali
+              <textarea
+                value={form.dati_catastali}
+                onChange={(e) =>
+                  setForm({ ...form, dati_catastali: e.target.value })
+                }
+                placeholder="Foglio, particella, subalterno..."
+              />
+            </label>
+
+            <label>
+              Email notifiche
+              <input
+                type="email"
+                value={form.email_notifiche}
+                onChange={(e) =>
+                  setForm({ ...form, email_notifiche: e.target.value })
+                }
+                placeholder="Es. studio@email.it"
+              />
+            </label>
+          </div>
+
+          <button
+            className="premium-save-button"
+            type="button"
+            onClick={creaCondominio}
+          >
+            Salva condominio
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // Avvolge ogni pagina autenticata con sidebar, contenuto e modali globali.
   function renderSaasLayout(contenuto: ReactNode) {
     return (
@@ -726,6 +884,8 @@ function App() {
             </div>
           </div>
         )}
+
+        {renderNuovoCondominioModal()}
 
         <section className="saas-content">{contenuto}</section>
 
@@ -1193,27 +1353,35 @@ function App() {
 
   // Crea un nuovo condominio manualmente dal form del modal.
   async function creaCondominio() {
-    if (!form.nome_condominio || !form.indirizzo || !form.comune) return
+    const nome = form.nome_condominio.trim()
+    const indirizzo = form.indirizzo.trim()
+    const comune = form.comune.trim()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    if (!nome || !indirizzo || !comune) {
+      showWarning("Inserisci nome condominio, indirizzo e comune.")
+      return
+    }
+
+    if (!user) {
+      showError("Sessione non valida. Accedi di nuovo per creare il condominio.")
+      return
+    }
 
     const { data, error } = await supabase
       .from("condomini")
       .insert([
         {
           tipo: form.tipo,
-          nome: form.nome_condominio,
-          nome_condominio: form.nome_condominio,
+          nome,
+          nome_condominio: nome,
           cod_fiscale: form.cod_fiscale,
-          indirizzo: form.indirizzo,
+          indirizzo,
           cap: form.cap,
-          comune: form.comune,
+          comune,
           provincia: form.provincia,
           dati_catastali: form.dati_catastali,
           email_notifiche: form.email_notifiche,
-          user_id: user?.id,
+          user_id: user.id,
         },
       ])
       .select()
@@ -1227,19 +1395,9 @@ function App() {
       setCondomini((prev) => [...data, ...prev])
     }
 
-    setForm({
-      tipo: "Condominio",
-      nome_condominio: "",
-      cod_fiscale: "",
-      indirizzo: "",
-      cap: "",
-      comune: "",
-      provincia: "",
-      dati_catastali: "",
-      email_notifiche: "",
-    })
-
+    resetFormCondominio()
     setShowModal(false)
+    showSuccess("Condominio creato correttamente.")
   }
 
   // Aggiorna i dati anagrafici principali di un condominio.
@@ -4630,7 +4788,13 @@ const condominioTarget = condomini.find(
             </p>
           </div>
 
-          <button onClick={() => setShowModal(true)}>+ Nuovo condominio</button>
+          <button
+            type="button"
+            className="premium-save-button condomini-new-button"
+            onClick={apriNuovoCondominioModal}
+          >
+            + Nuovo condominio
+          </button>
 
           <label className="import-excel-button">
             Importa Excel
@@ -4844,133 +5008,6 @@ const condominioTarget = condomini.find(
           </div>
         )}
 
-        {showModal && (
-          <div className="premium-modal">
-            <div className="premium-modal-card">
-              <div className="modal-header">
-                <h2>Nuovo condominio</h2>
-
-                <button
-                  className="icon-button"
-                  onClick={() => setShowModal(false)}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="premium-form-grid">
-                <label>
-                  Tipo
-                  <select
-                    value={form.tipo}
-                    onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-                  >
-                    <option value="Condominio">Condominio</option>
-                    <option value="Supercondominio">Supercondominio</option>
-                    <option value="Residence">Residence</option>
-                    <option value="Centro commerciale">Centro commerciale</option>
-                  </select>
-                </label>
-
-                <label>
-                  Nome condominio
-                  <input
-                    value={form.nome_condominio}
-                    onChange={(e) =>
-                      setForm({ ...form, nome_condominio: e.target.value })
-                    }
-                    placeholder="Es. Condominio Via Roma 12"
-                  />
-                </label>
-
-                <label>
-                  Codice fiscale
-                  <input
-                    value={form.cod_fiscale}
-                    onChange={(e) =>
-                      setForm({ ...form, cod_fiscale: e.target.value })
-                    }
-                    placeholder="Es. 01234567890"
-                  />
-                </label>
-
-                <label>
-                  Indirizzo
-                  <input
-                    value={form.indirizzo}
-                    onChange={(e) =>
-                      setForm({ ...form, indirizzo: e.target.value })
-                    }
-                    placeholder="Es. Via Roma 12"
-                  />
-                </label>
-
-                <label>
-                  CAP
-                  <input
-                    value={form.cap}
-                    onChange={(e) => setForm({ ...form, cap: e.target.value })}
-                    placeholder="Es. 40100"
-                  />
-                </label>
-
-                <label>
-                  Comune
-                  <input
-                    value={form.comune}
-                    onChange={(e) =>
-                      setForm({ ...form, comune: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        creaCondominio()
-                      }
-                    }}
-                    placeholder="Es. Bologna"
-                  />
-                </label>
-
-                <label>
-                  Provincia
-                  <input
-                    value={form.provincia}
-                    onChange={(e) =>
-                      setForm({ ...form, provincia: e.target.value })
-                    }
-                    placeholder="Es. BO"
-                  />
-                </label>
-
-                <label>
-                  Dati catastali
-                  <textarea
-                    value={form.dati_catastali}
-                    onChange={(e) =>
-                      setForm({ ...form, dati_catastali: e.target.value })
-                    }
-                    placeholder="Foglio, particella, subalterno..."
-                  />
-                </label>
-
-                <label>
-                  Email notifiche
-                  <input
-                    type="email"
-                    value={form.email_notifiche}
-                    onChange={(e) =>
-                      setForm({ ...form, email_notifiche: e.target.value })
-                    }
-                    placeholder="Es. studio@email.it"
-                  />
-                </label>
-              </div>
-
-              <button className="premium-save-button" onClick={creaCondominio}>
-                Salva condominio
-              </button>
-            </div>
-          </div>
-        )}
       </section>
     )
   }
