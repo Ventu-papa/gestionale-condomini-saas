@@ -4,11 +4,74 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 const DANEA_API_BASE = "https://domustudioapi.danea.it"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]
+
+function allowedOrigins() {
+  return (Deno.env.get("ALLOWED_ORIGINS") ?? DEFAULT_ALLOWED_ORIGINS.join(","))
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") ?? ""
+  const origins = allowedOrigins()
+  const allowedOrigin = origins.includes(origin) ? origin : origins[0] ?? ""
+
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    Vary: "Origin",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  }
+}
+
+function originConsentita(req: Request) {
+  const origin = req.headers.get("Origin")
+  return !origin || allowedOrigins().includes(origin)
+}
+
+const securityHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+}
+
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+  headers: Record<string, string>
+) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...headers,
+      ...securityHeaders,
+      "Content-Type": "application/json",
+    },
+  })
+}
+
+function deniedOriginResponse(headers: Record<string, string>) {
+  return jsonResponse(
+    403,
+    {
+      success: false,
+      message: "Origine non autorizzata.",
+    },
+    headers
+  )
+}
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store",
+}
+
+function mergeHeaders(...headersList: Record<string, string>[]) {
+  return Object.assign({}, ...headersList)
 }
 
 type DaneaCondominio = {
@@ -26,16 +89,6 @@ type CondominioEsistente = {
   indirizzo?: string | null
   comune?: string | null
   cod_fiscale?: string | null
-}
-
-function jsonResponse(status: number, body: Record<string, unknown>) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  })
 }
 
 function normalizza(valore: unknown) {
@@ -60,15 +113,34 @@ function chiaveCondominio(condominio: CondominioEsistente) {
 }
 
 Deno.serve(async (req) => {
+  const headers = mergeHeaders(corsHeaders(req), noStoreHeaders)
+  const json = (status: number, body: Record<string, unknown>) =>
+    jsonResponse(status, body, headers)
+
   if (req.method === "OPTIONS") {
+    if (!originConsentita(req)) {
+      return deniedOriginResponse(headers)
+    }
+
     return new Response("ok", {
-      headers: corsHeaders,
+      headers,
+    })
+  }
+
+  if (!originConsentita(req)) {
+    return deniedOriginResponse(headers)
+  }
+
+  if (req.method !== "POST") {
+    return json(405, {
+      success: false,
+      message: "Metodo non consentito.",
     })
   }
 
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return jsonResponse(500, {
+      return json(500, {
         success: false,
         message: "Variabili Supabase mancanti.",
       })
@@ -77,7 +149,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization")
 
     if (!authHeader) {
-      return jsonResponse(401, {
+      return json(401, {
         success: false,
         message: "Utente non autenticato.",
       })
@@ -92,7 +164,7 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser(token)
 
     if (userError || !user) {
-      return jsonResponse(401, {
+      return json(401, {
         success: false,
         message: "Sessione non valida.",
       })
@@ -107,7 +179,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (connectionError) {
-      return jsonResponse(500, {
+      return json(500, {
         success: false,
         message: connectionError.message,
       })
@@ -116,7 +188,7 @@ Deno.serve(async (req) => {
     const apiKey = String(connessione?.api_key ?? "").trim()
 
     if (!apiKey) {
-      return jsonResponse(200, {
+      return json(200, {
         success: false,
         message:
           "Danea Domustudio non e' ancora collegato. Inserisci una APIKey valida.",
@@ -138,7 +210,7 @@ Deno.serve(async (req) => {
         .update({ status: "error" })
         .eq("id", connessione.id)
 
-      return jsonResponse(200, {
+      return json(200, {
         success: false,
         message:
           daneaResponse.status === 401
@@ -150,7 +222,7 @@ Deno.serve(async (req) => {
     const condominiDanea = (await daneaResponse.json()) as DaneaCondominio[]
 
     if (!Array.isArray(condominiDanea)) {
-      return jsonResponse(200, {
+      return json(200, {
         success: false,
         message: "Risposta Danea non valida.",
       })
@@ -162,7 +234,7 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
 
     if (existingError) {
-      return jsonResponse(500, {
+      return json(500, {
         success: false,
         message: existingError.message,
       })
@@ -210,7 +282,7 @@ Deno.serve(async (req) => {
         .insert(nuoviCondomini)
 
       if (insertError) {
-        return jsonResponse(500, {
+        return json(500, {
           success: false,
           message: insertError.message,
         })
@@ -223,9 +295,10 @@ Deno.serve(async (req) => {
         status: "connected",
         last_sync_at: new Date().toISOString(),
       })
+      .eq("user_id", user.id)
       .eq("id", connessione.id)
 
-    return jsonResponse(200, {
+    return json(200, {
       success: true,
       message: "Danea Domustudio sincronizzato correttamente.",
       importedCount: nuoviCondomini.length,
@@ -233,7 +306,7 @@ Deno.serve(async (req) => {
       totalRemoteCount: condominiDanea.length,
     })
   } catch (error) {
-    return jsonResponse(500, {
+    return json(500, {
       success: false,
       message:
         error instanceof Error

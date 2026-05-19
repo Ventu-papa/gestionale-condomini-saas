@@ -1,6 +1,16 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = "https://weqgdvmcoxftsjdhjgbc.supabase.co"
-const supabaseAnonKey = "sb_publishable_GbB_x4HCqyajxqkjFWRLxg_j6ypX80J"
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Configurazione Supabase mancante.")
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    persistSession: true,
+  },
+})

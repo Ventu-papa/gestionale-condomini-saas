@@ -29,7 +29,6 @@ import "./App.css"
 
 type GestionaleConnection = {
   provider: "danea" | "excel" | string
-  api_key?: string | null
   connection_mode?: "api" | "file" | string
   status?: "connected" | "not_connected" | "error" | string
   is_primary?: boolean
@@ -165,6 +164,80 @@ function titoloNotifica(tipo: ToastNotification["tipo"]) {
   if (tipo === "error") return "Qualcosa non ha funzionato"
   if (tipo === "warning") return "Attenzione"
   return "Nota operativa"
+}
+
+const MAX_DOCUMENTO_BYTES = 20 * 1024 * 1024
+const ESTENSIONI_DOCUMENTO_CONSENTITE = new Set([
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "csv",
+  "txt",
+])
+const MIME_DOCUMENTO_CONSENTITI = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+  "text/plain",
+])
+
+function estensioneFile(nomeFile: string) {
+  const parti = nomeFile.toLowerCase().split(".")
+  return parti.length > 1 ? parti.pop() ?? "" : ""
+}
+
+function normalizzaNomeFile(nomeFile: string) {
+  const nomeSenzaPercorso = nomeFile.split(/[\\/]/).pop() || "documento"
+  const estensione = estensioneFile(nomeSenzaPercorso)
+  const nomeBase = nomeSenzaPercorso
+    .replace(/\.[^/.]+$/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+
+  return `${nomeBase || "documento"}.${estensione}`
+}
+
+function validaFileDocumento(file: File) {
+  const estensione = estensioneFile(file.name)
+
+  if (!ESTENSIONI_DOCUMENTO_CONSENTITE.has(estensione)) {
+    return "Formato file non consentito. Carica PDF, immagini, Word, Excel, CSV o TXT."
+  }
+
+  if (file.type && !MIME_DOCUMENTO_CONSENTITI.has(file.type)) {
+    return "Tipo file non consentito. Il documento non e' stato caricato."
+  }
+
+  if (file.size > MAX_DOCUMENTO_BYTES) {
+    return "File troppo grande. Il limite massimo e' 20 MB."
+  }
+
+  return null
+}
+
+function percorsoDocumentoSicuro(condominioId: number, file: File) {
+  const nomeFile = normalizzaNomeFile(file.name)
+  const idFile =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  return `${condominioId}/${idFile}-${nomeFile}`
 }
 
 function ticketGlobaleKey(ticket: Pick<TicketGlobale, "condominio_id" | "id">) {
@@ -496,7 +569,7 @@ function App() {
 
       const { data, error } = await supabase
         .from("gestionale_connections")
-        .select("*")
+        .select("provider, connection_mode, status, is_primary, last_sync_at")
         .eq("user_id", user.id)
         .eq("is_primary", true)
         .maybeSingle()
@@ -664,6 +737,23 @@ function App() {
         ))}
       </div>
     )
+  }
+
+  function selezionaFileDocumento(file?: File | null) {
+    if (!file) {
+      setFileDocumento(null)
+      return
+    }
+
+    const errore = validaFileDocumento(file)
+
+    if (errore) {
+      alert(errore)
+      setFileDocumento(null)
+      return
+    }
+
+    setFileDocumento(file)
   }
 
   // Apre il modal di conferma e registra la callback da eseguire su OK.
@@ -880,14 +970,17 @@ function App() {
                   const file = e.dataTransfer.files?.[0]
 
                   if (file) {
-                    setFileDocumento(file)
+                    selezionaFileDocumento(file)
                   }
                 }}
               >
                 <input
                   type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt"
                   hidden
-                  onChange={(e) => setFileDocumento(e.target.files?.[0] ?? null)}
+                  onChange={(e) =>
+                    selezionaFileDocumento(e.target.files?.[0] ?? null)
+                  }
                 />
 
                 <strong>
@@ -899,6 +992,7 @@ function App() {
                 </span>
 
                 <small>PDF, immagini, Word, Excel o altri allegati operativi</small>
+                <small>Dimensione massima 20 MB</small>
               </label>
 
               <button
@@ -932,6 +1026,7 @@ function App() {
                     src={previewUrl}
                     alt={previewDocumento.titolo}
                     className="document-preview-image"
+                    referrerPolicy="no-referrer"
                   />
                 ) : previewDocumento.mime_type === "application/pdf" ||
                   previewDocumento.file_name?.toLowerCase().endsWith(".pdf") ? (
@@ -939,6 +1034,8 @@ function App() {
                     src={previewUrl}
                     title={previewDocumento.titolo}
                     className="document-preview-frame"
+                    referrerPolicy="no-referrer"
+                    sandbox="allow-downloads"
                   />
                 ) : (
                   <div className="empty-state">
@@ -1085,7 +1182,7 @@ function App() {
 
         const { data: connessioneAggiornata } = await supabase
           .from("gestionale_connections")
-          .select("*")
+          .select("provider, connection_mode, status, is_primary, last_sync_at")
           .eq("user_id", user.id)
           .eq("provider", "danea")
           .maybeSingle()
@@ -1160,7 +1257,6 @@ function App() {
 
     const connessione = {
       provider,
-      api_key: apiKeyPulita,
       connection_mode: provider === "excel" ? "file" : "api",
       status:
         apiKeyPulita || provider === "excel" ? "connected" : "not_connected",
@@ -1640,7 +1736,15 @@ function App() {
       return
     }
 
-    window.open(data.signedUrl, "_blank")
+    const nuovaFinestra = window.open(
+      data.signedUrl,
+      "_blank",
+      "noopener,noreferrer"
+    )
+
+    if (nuovaFinestra) {
+      nuovaFinestra.opener = null
+    }
   }
 
   // Serve per aprire la preview all'interno dell'app senza lasciare la pagina, ad esempio per i PDF.//
@@ -1700,8 +1804,15 @@ function chiudiPreviewDocumento() {
     let fileSize = 0
 
     if (fileDocumento) {
-      fileName = fileDocumento.name
-      filePath = `${selectedCondominio.id}/${Date.now()}-${fileDocumento.name}`
+      const erroreFile = validaFileDocumento(fileDocumento)
+
+      if (erroreFile) {
+        alert(erroreFile)
+        return
+      }
+
+      fileName = normalizzaNomeFile(fileDocumento.name)
+      filePath = percorsoDocumentoSicuro(selectedCondominio.id, fileDocumento)
       mimeType = fileDocumento.type
       fileSize = fileDocumento.size
 
@@ -1783,10 +1894,17 @@ const condominioTarget = condomini.find(
   let fileSize = 0
 
   if (fileDocumento) {
-    fileName = fileDocumento.name
+    const erroreFile = validaFileDocumento(fileDocumento)
+
+    if (erroreFile) {
+      alert(erroreFile)
+      return
+    }
+
+    fileName = normalizzaNomeFile(fileDocumento.name)
     mimeType = fileDocumento.type
     fileSize = fileDocumento.size
-    filePath = `${condominioTarget.id}/${Date.now()}-${fileDocumento.name}`
+    filePath = percorsoDocumentoSicuro(condominioTarget.id, fileDocumento)
 
     const { error: uploadError } = await supabase.storage
       .from("documenti")
@@ -3394,8 +3512,9 @@ const condominioTarget = condomini.find(
 
               <input
                 type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt"
                 onChange={(e) => {
-                  setFileDocumento(e.target.files?.[0] ?? null)
+                  selezionaFileDocumento(e.target.files?.[0] ?? null)
                 }}
               />
 
