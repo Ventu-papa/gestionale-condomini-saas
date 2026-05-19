@@ -2,161 +2,161 @@ import { useState } from "react"
 
 type OnboardingPageProps = {
   onComplete: () => void
-  onConnectGestionale: (provider: string, apiKey: string) => void
+  onConnectGestionale: (provider: string, apiKey: string) => Promise<boolean>
 }
 
 export default function OnboardingPage({
   onComplete,
   onConnectGestionale,
 }: OnboardingPageProps) {
-    const [apiKey, setApiKey] = useState("")
-    const [showGestionaleModal, setShowGestionaleModal] = useState(false)
-    const [gestionaleSelezionato, setGestionaleSelezionato] = useState("")
+  const [apiKey, setApiKey] = useState("")
+  const [showGestionaleModal, setShowGestionaleModal] = useState(false)
+  const [gestionaleSelezionato, setGestionaleSelezionato] = useState<
+    "danea" | "excel" | ""
+  >("")
+
+  async function collegaGestionale(provider: "danea" | "excel") {
+    const collegato = await onConnectGestionale(provider, apiKey)
+
+    if (!collegato) return
+
+    setShowGestionaleModal(false)
+    onComplete()
+  }
+
   return (
-    <main className="onboarding-page">
+    <main className="onboarding-page" translate="no">
       <section className="onboarding-card">
         <p className="eyebrow">Configurazione iniziale</p>
 
         <h1>Imposta il tuo studio</h1>
 
         <p className="subtitle">
-          Collega il gestionale già in uso oppure inizia manualmente.
+          Collega Danea Domustudio oppure inizia manualmente.
         </p>
 
         <div className="onboarding-grid">
-            <div
-                className="onboarding-option onboarding-option-clickable"
-                onClick={() => setShowGestionaleModal(true)}
-            >
-                <span>Integrazione</span>
+          <div
+            className="onboarding-option onboarding-option-clickable"
+            onClick={() => setShowGestionaleModal(true)}
+          >
+            <span>Integrazione</span>
 
-                <strong>Collega il tuo gestionale</strong>
+            <strong>Collega Danea Domustudio</strong>
 
-                <p>
-                Connetti Danea, TeamSystem, Zucchetti oppure importa dati Excel/CSV.
-                </p>
+            <p>
+              Usa la APIKey di Domustudio Cloud Pro per importare e sincronizzare
+              i condomini dello studio.
+            </p>
 
-                <div className="gestionali-preview">
-                <div className="gestionale-badge">Danea</div>
-                <div className="gestionale-badge">TeamSystem</div>
-                <div className="gestionale-badge">Zucchetti</div>
-                <div className="gestionale-badge">Excel</div>
-                </div>
-
-                <button className="onboarding-connect">
-                Configura integrazione
-                </button>
+            <div className="gestionali-preview">
+              <div className="gestionale-badge">Danea Domustudio</div>
+              <div className="gestionale-badge">Excel / CSV</div>
             </div>
 
-          <button className="onboarding-option onboarding-manual-card" onClick={onComplete}>
+            <button className="onboarding-connect">
+              Configura integrazione
+            </button>
+          </div>
+
+          <button
+            className="onboarding-option onboarding-manual-card"
+            onClick={onComplete}
+          >
             <span>Setup manuale</span>
             <strong>Inizia senza collegamenti</strong>
             <p>
-              Crea il primo studio e aggiungi condomìni, impianti e scadenze manualmente.
+              Crea il primo studio e aggiungi condomini, impianti e scadenze
+              manualmente.
             </p>
           </button>
         </div>
       </section>
+
       {showGestionaleModal && (
         <div className="premium-modal">
-            <div className="premium-modal-card">
+          <div className="premium-modal-card">
             <div className="modal-header">
-                <h2>Scegli il tuo gestionale</h2>
+              <h2>Scegli come partire</h2>
 
-                <button
+              <button
                 className="icon-button"
                 onClick={() => setShowGestionaleModal(false)}
-                >
-                ×
-                </button>
+              >
+                x
+              </button>
             </div>
 
             <div className="gestionali-grid">
-                <div
+              <div
                 className={`gestionale-card ${
-                    gestionaleSelezionato === "danea" ? "active" : ""
+                  gestionaleSelezionato === "danea" ? "active" : ""
                 }`}
                 onClick={() => setGestionaleSelezionato("danea")}
-                >
+              >
                 <strong>Danea Domustudio</strong>
-                <p>Import e sincronizzazione automatica</p>
-                </div>
+                <p>Connessione API ufficiale per Domustudio Cloud Pro.</p>
+              </div>
 
-                <div
+              <div
                 className={`gestionale-card ${
-                    gestionaleSelezionato === "teamsystem" ? "active" : ""
-                }`}
-                onClick={() => setGestionaleSelezionato("teamsystem")}
-                >
-                <strong>TeamSystem</strong>
-                <p>Gestione professionale enterprise</p>
-                </div>
-
-                <div
-                className={`gestionale-card ${
-                    gestionaleSelezionato === "zucchetti" ? "active" : ""
-                }`}
-                onClick={() => setGestionaleSelezionato("zucchetti")}
-                >
-                <strong>Zucchetti</strong>
-                <p>Sincronizzazione studi strutturati</p>
-                </div>
-
-                <div
-                className={`gestionale-card ${
-                    gestionaleSelezionato === "excel" ? "active" : ""
+                  gestionaleSelezionato === "excel" ? "active" : ""
                 }`}
                 onClick={() => setGestionaleSelezionato("excel")}
-                >
+              >
                 <strong>Excel / CSV</strong>
-                <p>Importazione manuale avanzata</p>
-                </div>
+                <p>Importazione manuale dei dati gia' esportati.</p>
+              </div>
             </div>
 
             {gestionaleSelezionato && (
-                <div className="gestionale-config-section">
-                <h3>Configurazione</h3>
+              <div className="gestionale-config-section">
+                <h3>
+                  {gestionaleSelezionato === "danea"
+                    ? "Configurazione Danea"
+                    : "Import manuale"}
+                </h3>
 
-                {(gestionaleSelezionato === "danea" ||
-                    gestionaleSelezionato === "teamsystem" ||
-                    gestionaleSelezionato === "zucchetti") && (
-                    <>
+                {gestionaleSelezionato === "danea" ? (
+                  <>
+                    <p className="settings-note">
+                      Inserisci la APIKey creata in Domustudio Cloud Pro.
+                    </p>
+
                     <input
-                        className="onboarding-input"
-                        placeholder="Inserisci API Key"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
+                      className="onboarding-input"
+                      placeholder="APIKey Domustudio"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
                     />
 
                     <button
-                        className="premium-save-button"
-                        onClick={() => onConnectGestionale(gestionaleSelezionato, apiKey)}
+                      className="premium-save-button"
+                      onClick={() => collegaGestionale("danea")}
                     >
-                        Collega gestionale
+                      Collega e sincronizza
                     </button>
-                    </>
-                )}
-
-                {gestionaleSelezionato === "excel" && (
-                    <div className="excel-import-info">
+                  </>
+                ) : (
+                  <div className="excel-import-info">
                     <p>
-                        Potrai importare condomìni, anagrafiche e impianti tramite
-                        file Excel o CSV.
+                      Potrai importare condomini, anagrafiche e impianti tramite
+                      file Excel o CSV.
                     </p>
 
                     <button
                       className="premium-save-button"
-                      onClick={() => onConnectGestionale("excel", "")}
+                      onClick={() => collegaGestionale("excel")}
                     >
                       Continua con Excel / CSV
                     </button>
-                    </div>
+                  </div>
                 )}
-                </div>
+              </div>
             )}
-            </div>
+          </div>
         </div>
-    )}
+      )}
     </main>
   )
 }

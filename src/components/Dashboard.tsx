@@ -7,15 +7,9 @@ type ScadenzaDashboard = {
   descrizione: string
   tipo: string
   data: string
-}
-
-type AttivitaDashboard = {
-  id: string
-  tipo: string
-  titolo: string
-  descrizione: string
-  condominio: string
-  data: string
+  avviso?: string
+  data_avviso?: string
+  stato: string
 }
 
 type RisultatoRicercaDashboard = {
@@ -25,29 +19,15 @@ type RisultatoRicercaDashboard = {
   descrizione: string
 }
 
-type NotificaDashboard = {
-  id: string
-  tipo: string
-  titolo: string
-  descrizione: string
-  livello: string
-}
-
 type DashboardProps = {
   setPage: (page: Page) => void
   ticketAperti: number
-  scadenzeUrgenti: number
-  condominiTotali: number
-  documentiTotali: number
+  urgenze: number
   scadenzeTotali: number
-  scadenzeProssime: ScadenzaDashboard[]
-  attivitaRecenti: AttivitaDashboard[]
+  scadenzeGlobali: ScadenzaDashboard[]
   ricercaGlobale: string
   setRicercaGlobale: (value: string) => void
   risultatiRicercaGlobale: RisultatoRicercaDashboard[]
-  notificheOperative: NotificaDashboard[]
-  onSyncDanea: () => void
-  onOpenGestionaleModal: () => void
 }
 
 function giorniAllaScadenzaDashboard(data: string) {
@@ -64,18 +44,12 @@ function giorniAllaScadenzaDashboard(data: string) {
 export default function Dashboard({
   setPage,
   ticketAperti,
-  scadenzeUrgenti,
-  condominiTotali,
-  documentiTotali,
+  urgenze,
   scadenzeTotali,
-  scadenzeProssime,
-  attivitaRecenti,
+  scadenzeGlobali,
   ricercaGlobale,
   setRicercaGlobale,
   risultatiRicercaGlobale,
-  notificheOperative,
-  onSyncDanea: _onSyncDanea,
-  onOpenGestionaleModal,
 }: DashboardProps) {
   return (
     <section className="dashboard-premium">
@@ -84,12 +58,13 @@ export default function Dashboard({
           <span>Ricerca globale</span>
           <h2>Cerca nello studio</h2>
           <p>
-            Trova rapidamente condomìni, ticket, documenti e comunicazioni.
+            Trova rapidamente condomini, fornitori, ticket, documenti e
+            comunicazioni.
           </p>
         </div>
 
         <input
-          placeholder="Cerca es. ascensore, verbale, perdita acqua..."
+          placeholder="Cerca es. ascensore, verbale, fornitore, perdita acqua..."
           value={ricercaGlobale}
           onChange={(e) => setRicercaGlobale(e.target.value)}
         />
@@ -97,9 +72,7 @@ export default function Dashboard({
         {ricercaGlobale.trim() && (
           <div className="global-search-results">
             {risultatiRicercaGlobale.length === 0 ? (
-              <div className="empty-state">
-                Nessun risultato trovato.
-              </div>
+              <div className="empty-state">Nessun risultato trovato.</div>
             ) : (
               risultatiRicercaGlobale.slice(0, 8).map((risultato) => (
                 <div className="global-search-row" key={risultato.id}>
@@ -116,60 +89,32 @@ export default function Dashboard({
         )}
       </section>
 
-      <section className="integration-panel">
-        <div className="dashboard-card integration-card">
-          <div>
-            <span className="eyebrow">Integrazioni</span>
-
-            <h2>Gestionale principale</h2>
-
-            <p>
-              Collega Danea, TeamSystem o Zucchetti per sincronizzare condomìni,
-              anagrafiche e documenti.
-            </p>
-          </div>
-
-          <button
-            className="premium-save-button integration-button"
-            onClick={onOpenGestionaleModal}
-          >
-            Configura gestionale
-          </button> 
-        </div>
-      </section> 
-
-      <div className="analytics-grid">
+      <div className="analytics-grid dashboard-core-grid">
         <button className="analytics-card" onClick={() => setPage("scadenze")}>
-          <span>Urgenze</span>
-          <strong>{scadenzeUrgenti}</strong>
-          <p>Scadenze entro 30 giorni</p>
+          <span>Scadenze globali</span>
+          <strong>{scadenzeTotali}</strong>
+          <p>Scadenze impianti nello studio</p>
         </button>
 
         <button className="analytics-card" onClick={() => setPage("ticket")}>
-          <span>Ticket</span>
+          <span>Ticket aperti</span>
           <strong>{ticketAperti}</strong>
-          <p>Ticket ancora aperti</p>
+          <p>Segnalazioni ancora da chiudere</p>
         </button>
 
-        <button className="analytics-card" onClick={() => setPage("documenti")}>
-          <span>Archivio</span>
-          <strong>{documentiTotali}</strong>
-          <p>Documenti caricati</p>
-        </button>
-
-        <button className="analytics-card" onClick={() => setPage("condomini")}>
-          <span>Studio</span>
-          <strong>{condominiTotali}</strong>
-          <p>Condomìni gestiti</p>
+        <button className="analytics-card" onClick={() => setPage("scadenze")}>
+          <span>Urgenze</span>
+          <strong>{urgenze}</strong>
+          <p>Avvisi in rosso o arancione</p>
         </button>
       </div>
 
-      <div className="dashboard-operational-grid">
+      <div className="dashboard-operational-grid dashboard-operational-grid-single">
         <section className="dashboard-panel">
           <div className="panel-header">
             <div>
-              <span>Priorità operative</span>
-              <h2>Prossime scadenze</h2>
+              <span>Agenda globale</span>
+              <h2>Scadenze impianti</h2>
             </div>
 
             <button className="secondary small" onClick={() => setPage("scadenze")}>
@@ -178,16 +123,18 @@ export default function Dashboard({
           </div>
 
           <div className="dashboard-deadlines">
-            {scadenzeProssime.length === 0 ? (
-              <div className="empty-state">
-                Nessuna scadenza presente.
-              </div>
+            {scadenzeGlobali.length === 0 ? (
+              <div className="empty-state">Nessuna scadenza presente.</div>
             ) : (
-              scadenzeProssime.map((scadenza) => {
-                const giorni = giorniAllaScadenzaDashboard(scadenza.data)
+              scadenzeGlobali.slice(0, 8).map((scadenza) => {
+                const dataRiferimento = scadenza.data_avviso || scadenza.data
+                const giorni = giorniAllaScadenzaDashboard(dataRiferimento)
 
                 return (
-                  <div className="deadline-mini-row" key={scadenza.id}>
+                  <div
+                    className={`deadline-mini-row ${scadenza.stato}`}
+                    key={scadenza.id}
+                  >
                     <div>
                       <strong>{scadenza.impianto}</strong>
                       <p>{scadenza.condominio}</p>
@@ -195,112 +142,28 @@ export default function Dashboard({
 
                     <div>
                       <span>{scadenza.tipo}</span>
-                      <small>{scadenza.data}</small>
+                      <small>Scadenza: {scadenza.data}</small>
+                      <small>
+                        Avviso:{" "}
+                        {scadenza.avviso
+                          ? `${scadenza.avviso} giorni prima`
+                          : "Non impostato"}
+                      </small>
+                      {scadenza.data_avviso ? (
+                        <small>Data avviso: {scadenza.data_avviso}</small>
+                      ) : null}
                     </div>
 
-                    <strong className={giorni <= 30 ? "urgent-days" : ""}>
+                    <strong
+                      className={
+                        scadenza.stato === "rosso" ? "urgent-days" : ""
+                      }
+                    >
                       {giorni} gg
                     </strong>
                   </div>
                 )
               })
-            )}
-          </div>
-        </section>
-
-
-
-        <section className="dashboard-panel">
-          <div className="panel-header">
-            <div>
-              <span>Panoramica</span>
-              <h2>Stato studio</h2>
-            </div>
-          </div>        
-
-          <div className="studio-summary">
-            <div>
-              <span>Scadenze totali</span>
-              <strong>{scadenzeTotali}</strong>
-            </div>
-
-            <div>
-              <span>Ticket aperti</span>
-              <strong>{ticketAperti}</strong>
-            </div>
-
-            <div>
-              <span>Documenti</span>
-              <strong>{documentiTotali}</strong>
-            </div>
-
-            <div>
-              <span>Condomìni</span>
-              <strong>{condominiTotali}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="dashboard-panel notifications-panel">
-              <div className="panel-header">
-                <div>
-                  <span>Centro operativo</span>
-                  <h2>Notifiche</h2>
-                </div>
-              </div>
-
-              <div className="notifications-list">
-                {notificheOperative.length === 0 ? (
-                  <div className="empty-state">
-                    Nessuna notifica operativa.
-                  </div>
-                ) : (
-                  notificheOperative.map((notifica) => (
-                    <div
-                      className={`notification-row ${notifica.livello}`}
-                      key={notifica.id}
-                    >
-                      <div>
-                        <span>{notifica.tipo}</span>
-
-                        <strong>{notifica.titolo}</strong>
-
-                        <p>{notifica.descrizione}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-        <section className="dashboard-panel activity-panel">
-          <div className="panel-header">
-            <div>
-              <span>Memoria operativa</span>
-              <h2>Attività recenti</h2>
-            </div>
-          </div>
-
-          <div className="activity-feed">
-            {attivitaRecenti.length === 0 ? (
-              <div className="empty-state">
-                Nessuna attività recente.
-              </div>
-            ) : (
-              attivitaRecenti.map((attivita) => (
-                <div className="activity-row" key={attivita.id}>
-                  <span>{attivita.tipo}</span>
-
-                  <div>
-                    <strong>{attivita.titolo}</strong>
-                    <p>{attivita.descrizione || "Nessuna descrizione"}</p>
-                    <small>
-                      {attivita.condominio} ·{" "}
-                      {new Date(attivita.data).toLocaleString("it-IT")}
-                    </small>
-                  </div>
-                </div>
-              ))
             )}
           </div>
         </section>

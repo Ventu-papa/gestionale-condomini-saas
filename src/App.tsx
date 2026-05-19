@@ -1,17 +1,23 @@
 import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
+import type { User } from "@supabase/supabase-js"
 import * as XLSX from "xlsx"
 
 import { supabase } from "./supabase"
 import type {
   Condominio,
   Documento,
+  Fornitore,
   Impianto,
   Page,
   Ticket,
   TimelineEvent,
 } from "./types"
-import { getStatoScadenza, giorniAllaScadenza } from "./utils/scadenze"
+import {
+  calcolaDataAvviso,
+  getStatoScadenzaDaGiorniAvviso,
+  giorniAllaScadenza,
+} from "./utils/scadenze"
 import { impiantiDisponibili, modules } from "./data/constants"
 
 import LoginPage from "./components/LoginPage"
@@ -21,17 +27,178 @@ import OnboardingPage from "./components/onboarding-page"
 
 import "./App.css"
 
+type GestionaleConnection = {
+  provider: "danea" | "excel" | string
+  api_key?: string | null
+  connection_mode?: "api" | "file" | string
+  status?: "connected" | "not_connected" | "error" | string
+  is_primary?: boolean
+  last_sync_at?: string | null
+}
+
+type DaneaSyncResponse = {
+  success: boolean
+  message: string
+  importedCount?: number
+  skippedCount?: number
+  totalRemoteCount?: number
+}
+
+type CommunicationEvent = {
+  id: string
+  channel?: "email" | "pec" | "whatsapp" | "phone" | string
+  sender?: string | null
+  subject?: string | null
+  body?: string | null
+  priority?: "bassa" | "media" | "alta" | string | null
+  status?: string | null
+  linked_ticket_id?: number | null
+  condominio_id?: number | null
+  created_at: string
+}
+
+type ImportCondominio = {
+  nome: string
+  nome_condominio: string
+  indirizzo: string
+  comune: string
+  email_notifiche: string
+  user_id: string
+  cap?: string
+  cod_fiscale?: string
+  dati_catastali?: string
+  provincia?: string
+  tipo?: string
+}
+
+type ImportIssue = Partial<ImportCondominio> & {
+  riga: number
+  motivo: string
+  dati?: Record<string, unknown>
+}
+
+type DocumentoGlobale = Documento & {
+  condominio_id: number
+  condominio: string
+  indirizzo: string
+}
+
+type TicketGlobale = Ticket & {
+  condominio_id: number
+  condominio: string
+  indirizzo: string
+}
+
+type ScadenzaOperativa = {
+  id: string
+  condominio: string
+  impianto: string
+  descrizione: string
+  tipo: string
+  data: string
+  avviso?: string
+  data_avviso?: string
+  stato: string
+}
+
+type FornitoreForm = {
+  nome: string
+  cognome: string
+  partita_iva: string
+  telefono: string
+  iban: string
+  mansione: string
+  condominio_id: number | ""
+}
+
+function creaIdLocale() {
+  return Date.now()
+}
+
+function ticketGlobaleKey(ticket: Pick<TicketGlobale, "condominio_id" | "id">) {
+  return `${ticket.condominio_id}-${ticket.id}`
+}
+
+function normalizzaGiorniAvviso(value: string) {
+  const soloNumeri = value.replace(/\D/g, "").slice(0, 3)
+  const giorni = Number(soloNumeri)
+
+  if (!soloNumeri) return ""
+  if (giorni > 365) return "365"
+
+  return soloNumeri
+}
+
+function normalizzaTelefonoItalia(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11)
+}
+
+function normalizzaPartitaIva(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11)
+}
+
+function normalizzaIbanItalia(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 27)
+}
+
+function ibanItalianoValido(value: string) {
+  if (!value) return true
+
+  return /^IT\d{2}[A-Z]\d{10}[A-Z0-9]{12}$/.test(value)
+}
+
+function telefonoItalianoValido(value: string) {
+  if (!value) return true
+
+  return /^\d{6,11}$/.test(value)
+}
+
+function partitaIvaValida(value: string) {
+  if (!value) return true
+
+  return /^\d{11}$/.test(value)
+}
+
+function nomeCondominio(
+  condominio?: Pick<Condominio, "nome" | "nome_condominio"> | null,
+  fallback = "Condominio senza nome"
+) {
+  return condominio?.nome || condominio?.nome_condominio || fallback
+}
+
+function statoImpianto(impianto: Impianto) {
+  const stati = [
+    getStatoScadenzaDaGiorniAvviso(
+      impianto.manutenzione,
+      impianto.avviso_manutenzione
+    ),
+    getStatoScadenzaDaGiorniAvviso(
+      impianto.contratto_manutenzione,
+      impianto.avviso_contratto_manutenzione
+    ),
+  ]
+
+  if (stati.includes("rosso")) return "rosso"
+  if (stati.includes("arancione")) return "arancione"
+  if (stati.includes("verde")) return "verde"
+  return "none"
+}
+
 function App() {
   // ============================================================
   // STATO: SESSIONE, ONBOARDING E NAVIGAZIONE
   // Gestisce l'utente autenticato, il completamento onboarding,
   // la pagina attiva e la shell responsive dell'app.
   // ============================================================
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [temaInterfaccia, setTemaInterfaccia] = useState<"dark" | "light">(
+    () => (localStorage.getItem("temaInterfaccia") as "dark" | "light") || "dark"
+  )
   const [page, setPage] = useState<Page>("home")
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
   const [selectedCondominio, setSelectedCondominio] =
     useState<Condominio | null>(null)
+  const selectedCondominioId = selectedCondominio?.id ?? null
   const [onboardingCompletato, setOnboardingCompletato] = useState(false)
   const [caricamentoOnboarding, setCaricamentoOnboarding] = useState(true)
 
@@ -48,20 +215,29 @@ function App() {
   // Controlla il gestionale principale, il modal di collegamento e
   // la timeline delle comunicazioni importate o generate.
   // ============================================================
-  const [gestionaleAttivo, setGestionaleAttivo] = useState<any>(null)
+  const [gestionaleAttivo, setGestionaleAttivo] =
+    useState<GestionaleConnection | null>(null)
   const [showGestionaleModal, setShowGestionaleModal] = useState(false)
   const [gestionaleSelezionato, setGestionaleSelezionato] = useState("")
   const [apiKeyGestionale, setApiKeyGestionale] = useState("")
-  const [communicationEvents, setCommunicationEvents] = useState<any[]>([])
+  const [communicationEvents, setCommunicationEvents] = useState<
+    CommunicationEvent[]
+  >([])
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" })
+    })
+  }, [page, selectedCondominioId])
 
   // ============================================================
   // STATO: IMPORT EXCEL / CSV
   // Conserva anteprima, errori, duplicati e stato di avanzamento
   // prima del salvataggio definitivo su Supabase.
   // ============================================================
-  const [anteprimaImport, setAnteprimaImport] = useState<any[]>([])
-  const [erroriImport, setErroriImport] = useState<any[]>([])
-  const [duplicatiImport, setDuplicatiImport] = useState<any[]>([])
+  const [anteprimaImport, setAnteprimaImport] = useState<ImportCondominio[]>([])
+  const [erroriImport, setErroriImport] = useState<ImportIssue[]>([])
+  const [duplicatiImport, setDuplicatiImport] = useState<ImportIssue[]>([])
   const [showImportReport, setShowImportReport] = useState(false)
   const [importInCorso, setImportInCorso] = useState(false)
 
@@ -84,8 +260,8 @@ function App() {
   const [showUploadDocumentoModal, setShowUploadDocumentoModal] = useState(false)
   const [uploadCondominioId, setUploadCondominioId] = useState<number | "">("")
   const [editingTicketId, setEditingTicketId] = useState<number | null>(null)
-  const [editingGlobalTicketId, setEditingGlobalTicketId] =
-    useState<number | null>(null)
+  const [editingGlobalTicketKey, setEditingGlobalTicketKey] =
+    useState<string | null>(null)
   const [editingCommunicationId, setEditingCommunicationId] =
     useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
@@ -106,6 +282,11 @@ function App() {
   // usati per creare impianti, eventi, ticket, documenti e login.
   // ============================================================
   const [condomini, setCondomini] = useState<Condominio[]>([])
+  const [fornitori, setFornitori] = useState<Fornitore[]>([])
+  const [ricercaFornitori, setRicercaFornitori] = useState("")
+  const [editingFornitoreId, setEditingFornitoreId] = useState<number | null>(
+    null
+  )
 
   const [loginForm, setLoginForm] = useState({
     email: "",
@@ -128,7 +309,19 @@ function App() {
     tipo: "",
     nome: "",
     manutenzione: "",
+    avviso_manutenzione: "",
     contratto_manutenzione: "",
+    avviso_contratto_manutenzione: "",
+  })
+
+  const [fornitoreForm, setFornitoreForm] = useState<FornitoreForm>({
+    nome: "",
+    cognome: "",
+    partita_iva: "",
+    telefono: "",
+    iban: "",
+    mansione: "",
+    condominio_id: "",
   })
 
   const [nuovoEvento, setNuovoEvento] = useState({
@@ -159,6 +352,12 @@ function App() {
   // Supabase segnala login/logout o refresh sessione.
   // ============================================================
   useEffect(() => {
+    const resetImportazione = () => {
+      setAnteprimaImport([])
+      setErroriImport([])
+      setDuplicatiImport([])
+    }
+
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
     })
@@ -166,6 +365,7 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null)
+        resetImportazione()
       }
     )
 
@@ -173,6 +373,14 @@ function App() {
       listener.subscription.unsubscribe()
     }
   }, [])
+
+  // ============================================================
+  // EFFECT: Tema
+  // Cambia a funzione dell'utente i colori del tema
+  // ============================================================
+  useEffect(() => {
+    localStorage.setItem("temaInterfaccia", temaInterfaccia)
+  }, [temaInterfaccia])
 
   // ============================================================
   // EFFECT: GESTIONALE PRINCIPALE
@@ -202,16 +410,6 @@ function App() {
 
     caricaGestionaleAttivo()
   }, [user])
-
-  // ============================================================
-  // EFFECT: RESET IMPORT AL CAMBIO UTENTE
-  // Svuota anteprima, errori e duplicati quando cambia account.
-  // ============================================================
-  useEffect(() => {
-    setAnteprimaImport([])
-    setErroriImport([])
-    setDuplicatiImport([])
-  }, [user?.id])
 
   // ============================================================
   // EFFECT: COMMUNICATION EVENTS
@@ -305,6 +503,34 @@ function App() {
   }, [user])
 
   // ============================================================
+  // EFFECT: FORNITORI UTENTE
+  // Carica le anagrafiche fornitori collegate allo studio.
+  // ============================================================
+  useEffect(() => {
+    async function caricaFornitoriUtente() {
+      if (!user) {
+        setFornitori([])
+        return
+      }
+
+      const { data, error } = await supabase
+        .from("fornitori")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      setFornitori(data ?? [])
+    }
+
+    caricaFornitoriUtente()
+  }, [user])
+
+  // ============================================================
   // UI: LAYOUT E CONFERME
   // Funzioni di supporto usate da tutte le pagine autenticate.
   // ============================================================
@@ -322,9 +548,14 @@ function App() {
   // Avvolge ogni pagina autenticata con sidebar, contenuto e modali globali.
   function renderSaasLayout(contenuto: ReactNode) {
     return (
-      <main className="app-shell saas-layout">
+      <main
+        className={`app-shell saas-layout theme-${temaInterfaccia}`}
+        translate="no"
+      >
         <button
           className="mobile-menu-button"
+          type="button"
+          aria-label="Apri menu"
           onClick={() => setSidebarMobileOpen(true)}
         >
           ☰
@@ -334,6 +565,7 @@ function App() {
           page={page}
           setPage={(nuovaPagina) => {
             setPage(nuovaPagina)
+            setSelectedCondominio(null)
             setSidebarMobileOpen(false)
           }}
           userEmail={user?.email}
@@ -343,6 +575,7 @@ function App() {
             await supabase.auth.signOut()
             setUser(null)
             setCondomini([])
+            setFornitori([])
             setSelectedCondominio(null)
             setPage("home")
           }}
@@ -433,7 +666,7 @@ function App() {
                     <option value="">Seleziona condominio</option>
                     {condomini.map((condominio) => (
                       <option key={condominio.id} value={condominio.id}>
-                        {condominio.nome || "Condominio senza nome"}
+                        {nomeCondominio(condominio)}
                       </option>
                     ))}
                   </select>
@@ -608,37 +841,24 @@ function App() {
                   onClick={() => setGestionaleSelezionato("danea")}
                 >
                   <strong>Danea Domustudio</strong>
-                  <p>Import e sincronizzazione automatica</p>
-                </div>
-
-                <div
-                  className={`gestionale-card ${
-                    gestionaleSelezionato === "teamsystem" ? "active" : ""
-                  }`}
-                  onClick={() => setGestionaleSelezionato("teamsystem")}
-                >
-                  <strong>TeamSystem</strong>
-                  <p>Gestione professionale enterprise</p>
-                </div>
-
-                <div
-                  className={`gestionale-card ${
-                    gestionaleSelezionato === "zucchetti" ? "active" : ""
-                  }`}
-                  onClick={() => setGestionaleSelezionato("zucchetti")}
-                >
-                  <strong>Zucchetti</strong>
-                  <p>Sincronizzazione studi strutturati</p>
+                  <p>
+                    Collegamento tramite APIKey Domustudio Cloud Pro e import
+                    condomini dall'archivio Danea.
+                  </p>
                 </div>
               </div>
 
               {gestionaleSelezionato && (
                 <div className="gestionale-config-section">
-                  <h3>Configurazione</h3>
+                  <h3>Configurazione Danea</h3>
+                  <p className="settings-note">
+                    Inserisci la APIKey generata da Domustudio Cloud Pro. La
+                    sincronizzazione usera' le API ufficiali Danea.
+                  </p>
 
                   <input
                     className="onboarding-input"
-                    placeholder="Inserisci API Key"
+                    placeholder="APIKey Domustudio"
                     value={apiKeyGestionale}
                     onChange={(e) => setApiKeyGestionale(e.target.value)}
                   />
@@ -646,15 +866,17 @@ function App() {
                   <button
                     className="premium-save-button"
                     onClick={async () => {
-                      await salvaCollegamentoGestionale(
+                      const collegato = await salvaCollegamentoGestionale(
                         gestionaleSelezionato,
                         apiKeyGestionale
                       )
 
-                      setShowGestionaleModal(false)
+                      if (collegato) {
+                        setShowGestionaleModal(false)
+                      }
                     }}
                   >
-                    Collega gestionale
+                    Collega e sincronizza
                   </button>
                 </div>
               )}
@@ -693,53 +915,84 @@ function App() {
   // ============================================================
 
   // Avvia la funzione Supabase dedicata alla sincronizzazione Danea.
-  async function sincronizzaDanea() {
+  async function sincronizzaDanea(): Promise<boolean> {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) {
-        alert("Sessione non valida")
-        return
-      }
-
-      const response = await fetch(
-        "https://weqgdvmcoxftsjdhjgbc.supabase.co/functions/v1/sync-danea",
+      const { data, error } = await supabase.functions.invoke<DaneaSyncResponse>(
+        "sync-danea",
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
         }
       )
 
-      const text = await response.text()
-
-      if (!response.ok) {
-        alert(`Errore funzione: ${response.status} - ${text}`)
-        return
+      if (error) {
+        alert(`Errore sincronizzazione Danea: ${error.message}`)
+        return false
       }
 
-      try {
-        const data = JSON.parse(text)
-        alert(data?.message ?? "Risposta ricevuta dalla funzione")
-      } catch {
-        alert(text || "Risposta ricevuta dalla funzione")
+      if (!data?.success) {
+        alert(data?.message ?? "Sincronizzazione Danea non riuscita.")
+        return false
       }
+
+      const riepilogo =
+        typeof data.importedCount === "number"
+          ? ` Importati: ${data.importedCount}. Ignorati: ${
+              data.skippedCount ?? 0
+            }.`
+          : ""
+
+      alert(`${data.message}${riepilogo}`)
+
+      if (user) {
+        const { data: condominiAggiornati } = await supabase
+          .from("condomini")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+
+        const { data: connessioneAggiornata } = await supabase
+          .from("gestionale_connections")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("provider", "danea")
+          .maybeSingle()
+
+        setCondomini(condominiAggiornati ?? condomini)
+
+        if (connessioneAggiornata) {
+          setGestionaleAttivo(connessioneAggiornata)
+        }
+      }
+
+      return true
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
           : "Errore sconosciuto durante la sincronizzazione"
       )
+      return false
     }
   }
 
   // Salva o aggiorna il gestionale scelto come principale dello studio.
-  async function salvaCollegamentoGestionale(provider: string, apiKey: string) {
-    if (!user) return
+  async function salvaCollegamentoGestionale(
+    provider: string,
+    apiKey: string
+  ): Promise<boolean> {
+    if (!user) return false
+
+    if (provider !== "danea" && provider !== "excel") {
+      alert("Per ora e' disponibile solo il collegamento Danea Domustudio.")
+      return false
+    }
+
+    const apiKeyPulita = apiKey.trim()
+
+    if (provider === "danea" && !apiKeyPulita) {
+      alert("Inserisci la APIKey di Domustudio Cloud Pro.")
+      return false
+    }
 
     const { error: resetError } = await supabase
       .from("gestionale_connections")
@@ -748,16 +1001,17 @@ function App() {
 
     if (resetError) {
       alert(resetError.message)
-      return
+      return false
     }
 
     const { error } = await supabase.from("gestionale_connections").upsert(
       {
         user_id: user.id,
         provider,
-        api_key: apiKey,
+        api_key: apiKeyPulita,
         connection_mode: provider === "excel" ? "file" : "api",
-        status: apiKey || provider === "excel" ? "connected" : "not_connected",
+        status:
+          apiKeyPulita || provider === "excel" ? "connected" : "not_connected",
         is_primary: true,
         last_sync_at: null,
       },
@@ -768,18 +1022,27 @@ function App() {
 
     if (error) {
       alert(error.message)
-      return
+      return false
+    }
+
+    const connessione = {
+      provider,
+      api_key: apiKeyPulita,
+      connection_mode: provider === "excel" ? "file" : "api",
+      status:
+        apiKeyPulita || provider === "excel" ? "connected" : "not_connected",
+      is_primary: true,
+      last_sync_at: null,
+    }
+
+    setGestionaleAttivo(connessione)
+
+    if (provider === "danea") {
+      return await sincronizzaDanea()
     }
 
     alert("Gestionale principale salvato correttamente.")
-    setGestionaleAttivo({
-      provider,
-      api_key: apiKey,
-      connection_mode: provider === "excel" ? "file" : "api",
-      status: apiKey || provider === "excel" ? "connected" : "not_connected",
-      is_primary: true,
-      last_sync_at: null,
-    })
+    return true
   }
 
   // Rimuove la connessione del gestionale principale dopo conferma utente.
@@ -840,6 +1103,7 @@ function App() {
       .insert([
         {
           tipo: form.tipo,
+          nome: form.nome_condominio,
           nome_condominio: form.nome_condominio,
           cod_fiscale: form.cod_fiscale,
           indirizzo: form.indirizzo,
@@ -882,7 +1146,8 @@ function App() {
     const { error } = await supabase
       .from("condomini")
       .update({
-        nome: condominio.nome,
+        nome: nomeCondominio(condominio),
+        nome_condominio: nomeCondominio(condominio),
         indirizzo: condominio.indirizzo,
         comune: condominio.comune,
       })
@@ -929,7 +1194,7 @@ function App() {
     const primoFoglio = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[primoFoglio]
 
-    const righeGreze = XLSX.utils.sheet_to_json<any[]>(worksheet, {
+    const righeGreze = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
       header: 1,
       defval: "",
     })
@@ -951,14 +1216,14 @@ function App() {
       return
     }
 
-    const righe = XLSX.utils.sheet_to_json<any>(worksheet, {
+    const righe = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
       range: indiceHeader,
       defval: "",
     })
 
-    const validi: any[] = []
-    const errori: any[] = []
-    const duplicati: any[] = []
+    const validi: ImportCondominio[] = []
+    const errori: ImportIssue[] = []
+    const duplicati: ImportIssue[] = []
 
     const { data: condominiEsistenti, error } = await supabase
       .from("condomini")
@@ -976,7 +1241,12 @@ function App() {
         .trim()
         .replace(/\s+/g, " ")
 
-    const creaChiaveDuplicato = (condominio: any) => {
+    const creaChiaveDuplicato = (
+      condominio: Pick<
+        ImportCondominio,
+        "nome" | "nome_condominio" | "indirizzo" | "comune"
+      >
+    ) => {
       const nome = condominio.nome || condominio.nome_condominio || ""
 
       return `${normalizzaTesto(nome)}|${normalizzaTesto(
@@ -993,39 +1263,36 @@ function App() {
     const chiaviFile = new Set<string>()
 
     righe.forEach((riga, index) => {
-      const condominio = {
-        nome:
-          riga.nome ||
-          riga.Nome ||
-          riga.condominio ||
-          riga.Condominio ||
-          riga["Nome condominio"] ||
-          riga["Nome Condominio"] ||
-          "",
+      const valore = (...chiavi: string[]) =>
+        chiavi
+          .map((chiave) => String(riga[chiave] ?? "").trim())
+          .find(Boolean) ?? ""
 
-        indirizzo:
-          riga.indirizzo ||
-          riga.Indirizzo ||
-          riga.via ||
-          riga.Via ||
-          "",
+      const nome = valore(
+        "nome",
+        "Nome",
+        "condominio",
+        "Condominio",
+        "Nome condominio",
+        "Nome Condominio"
+      )
 
-        comune:
-          riga.comune ||
-          riga.Comune ||
-          riga.citta ||
-          riga.Citta ||
-          riga["Città"] ||
-          "",
+      const condominio: ImportCondominio = {
+        nome,
+        nome_condominio: nome,
 
-        email_notifiche:
-          riga.email_notifiche ||
-          riga.Email_notifiche ||
-          riga.email ||
-          riga.Email ||
-          riga.mail ||
-          riga.Mail ||
-          "",
+        indirizzo: valore("indirizzo", "Indirizzo", "via", "Via"),
+
+        comune: valore("comune", "Comune", "citta", "Citta", "Città"),
+
+        email_notifiche: valore(
+          "email_notifiche",
+          "Email_notifiche",
+          "email",
+          "Email",
+          "mail",
+          "Mail"
+        ),
 
         user_id: user.id,
       }
@@ -1123,7 +1390,7 @@ function App() {
     const impiantiAggiornati = [
       ...impiantiAttuali,
       {
-        id: Date.now(),
+        id: creaIdLocale(),
         ...nuovoImpianto,
       },
     ]
@@ -1152,7 +1419,9 @@ function App() {
       tipo: "",
       nome: "",
       manutenzione: "",
+      avviso_manutenzione: "",
       contratto_manutenzione: "",
+      avviso_contratto_manutenzione: "",
     })
   }
 
@@ -1487,7 +1756,7 @@ const condominioTarget = condomini.find(
     setEditingDocumentoId(null)
   }
 
-  async function analizzaDocumentoMock(documentoDaAnalizzare: any) {
+  async function analizzaDocumentoMock(documentoDaAnalizzare: DocumentoGlobale) {
   const condominio = condomini.find(
     (c) => Number(c.id) === Number(documentoDaAnalizzare.condominio_id)
   )
@@ -1528,15 +1797,21 @@ const condominioTarget = condomini.find(
         ? {
             ...documento,
             ocr_status: "completed" as const,
-            ocr_text:
-              "Testo OCR simulato: documento analizzato correttamente. Sono stati individuati dati rilevanti, date operative e possibili importi.",
+            ocr_text: `
+              Testo OCR simulato del documento ${documento.titolo}.
+              Condominio collegato: ${nomeCondominio(condominio)}.
+              Categoria documento: ${documento.categoria}.
+              Possibili riferimenti rilevati: ascensore, manutenzione, contratto, fattura, certificazione, scadenza.
+              Data rilevata: ${new Date().toISOString().slice(0, 10)}.
+              Importo rilevato: € 1.250,00.
+            `,
             ai_category: documento.categoria || "Documento operativo",
             ai_summary:
               "Documento analizzato automaticamente. Il sistema ha rilevato contenuti utili per archivio, ricerca e future automazioni operative.",
             ai_extracted_dates: [
               new Date().toISOString().slice(0, 10),
             ],
-            ai_extracted_amounts: ["€ 0,00"],
+           ai_extracted_amounts: ["€ 1.250,00"],
           }
         : documento
     )
@@ -1843,19 +2118,27 @@ const condominioTarget = condomini.find(
   }
 
   // Salva un ticket modificato partendo dalla vista globale.
-  async function modificaTicketGlobale(
-    ticketAggiornato: any,
-    condominioNome: string
-  ) {
-    const condominio = condomini.find((c) => c.nome === condominioNome)
+  async function modificaTicketGlobale(ticketAggiornato: TicketGlobale) {
+    const condominio = condomini.find(
+      (c) => c.id === ticketAggiornato.condominio_id
+    )
 
     if (!condominio) {
       alert("Condominio non trovato.")
       return
     }
 
+    const ticketPulito: Ticket = {
+      id: ticketAggiornato.id,
+      titolo: ticketAggiornato.titolo,
+      descrizione: ticketAggiornato.descrizione,
+      stato: ticketAggiornato.stato,
+      priorita: ticketAggiornato.priorita,
+      data: ticketAggiornato.data,
+    }
+
     const ticketAggiornati = (condominio.ticket ?? []).map((ticket) =>
-      ticket.id === ticketAggiornato.id ? ticketAggiornato : ticket
+      ticket.id === ticketAggiornato.id ? ticketPulito : ticket
     )
 
     const { error } = await supabase
@@ -1881,13 +2164,13 @@ const condominioTarget = condomini.find(
       )
     )
 
-    setEditingGlobalTicketId(null)
+    setEditingGlobalTicketKey(null)
   }
 
   // Elimina un ticket dalla vista globale dopo aver individuato il condominio.
-  async function eliminaTicketGlobale(ticketDaEliminare: any) {
+  async function eliminaTicketGlobale(ticketDaEliminare: TicketGlobale) {
     const condominio = condomini.find(
-      (c) => c.nome === ticketDaEliminare.condominio
+      (c) => c.id === ticketDaEliminare.condominio_id
     )
 
     if (!condominio) {
@@ -1918,6 +2201,157 @@ const condominioTarget = condomini.find(
             c.id === condominio.id ? { ...c, ticket: ticketAggiornati } : c
           )
         )
+      }
+    )
+  }
+
+  function aggiornaTicketGlobaleDraft(
+    ticketDaAggiornare: TicketGlobale,
+    patch: Partial<Ticket>
+  ) {
+    setCondomini((prev) =>
+      prev.map((condominio) =>
+        condominio.id === ticketDaAggiornare.condominio_id
+          ? {
+              ...condominio,
+              ticket: (condominio.ticket ?? []).map((ticket) =>
+                ticket.id === ticketDaAggiornare.id
+                  ? { ...ticket, ...patch }
+                  : ticket
+              ),
+            }
+          : condominio
+      )
+    )
+  }
+
+  // ============================================================
+  // FORNITORI
+  // CRUD anagrafiche fornitori collegate ai condomini.
+  // ============================================================
+
+  function resetFornitoreForm() {
+    setFornitoreForm({
+      nome: "",
+      cognome: "",
+      partita_iva: "",
+      telefono: "",
+      iban: "",
+      mansione: "",
+      condominio_id: "",
+    })
+  }
+
+  async function creaFornitore() {
+    if (!user || !fornitoreForm.nome.trim() || !fornitoreForm.cognome.trim()) {
+      alert("Inserisci almeno nome e cognome del fornitore.")
+      return
+    }
+
+    const telefono = normalizzaTelefonoItalia(fornitoreForm.telefono)
+    const iban = normalizzaIbanItalia(fornitoreForm.iban)
+    const partitaIva = normalizzaPartitaIva(fornitoreForm.partita_iva)
+
+    if (!telefonoItalianoValido(telefono)) {
+      alert("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
+      return
+    }
+
+    if (!partitaIvaValida(partitaIva)) {
+      alert("La Partita IVA deve contenere 11 cifre.")
+      return
+    }
+
+    if (!ibanItalianoValido(iban)) {
+      alert("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
+      return
+    }
+
+    const nuovoFornitore = {
+      user_id: user.id,
+      nome: fornitoreForm.nome.trim(),
+      cognome: fornitoreForm.cognome.trim(),
+      partita_iva: partitaIva,
+      telefono,
+      iban,
+      mansione: fornitoreForm.mansione.trim(),
+      condominio_id: fornitoreForm.condominio_id || null,
+    }
+
+    const { data, error } = await supabase
+      .from("fornitori")
+      .insert([nuovoFornitore])
+      .select()
+      .single()
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setFornitori((prev) => [data, ...prev])
+    resetFornitoreForm()
+  }
+
+  async function modificaFornitore(fornitoreAggiornato: Fornitore) {
+    const telefono = normalizzaTelefonoItalia(fornitoreAggiornato.telefono)
+    const iban = normalizzaIbanItalia(fornitoreAggiornato.iban)
+    const partitaIva = normalizzaPartitaIva(fornitoreAggiornato.partita_iva)
+
+    if (!telefonoItalianoValido(telefono)) {
+      alert("Il numero di telefono deve contenere solo numeri, da 6 a 11 cifre.")
+      return
+    }
+
+    if (!partitaIvaValida(partitaIva)) {
+      alert("La Partita IVA deve contenere 11 cifre.")
+      return
+    }
+
+    if (!ibanItalianoValido(iban)) {
+      alert("L'IBAN italiano deve avere 27 caratteri e iniziare con IT.")
+      return
+    }
+
+    const { error } = await supabase
+      .from("fornitori")
+      .update({
+        nome: fornitoreAggiornato.nome,
+        cognome: fornitoreAggiornato.cognome,
+        partita_iva: partitaIva,
+        telefono,
+        iban,
+        mansione: fornitoreAggiornato.mansione,
+        condominio_id: fornitoreAggiornato.condominio_id || null,
+      })
+      .eq("id", fornitoreAggiornato.id)
+      .eq("user_id", user?.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setEditingFornitoreId(null)
+  }
+
+  async function eliminaFornitore(id: number) {
+    apriConferma(
+      "Eliminare fornitore?",
+      "Questa azione eliminerà l'anagrafica del fornitore.",
+      async () => {
+        const { error } = await supabase
+          .from("fornitori")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", user?.id)
+
+        if (error) {
+          alert(error.message)
+          return
+        }
+
+        setFornitori((prev) => prev.filter((fornitore) => fornitore.id !== id))
       }
     )
   }
@@ -1977,7 +2411,7 @@ const condominioTarget = condomini.find(
   }
 
   // Crea un ticket partendo da una comunicazione non ancora gestita.
-  async function creaTicketDaCommunicationEvent(evento: any) {
+  async function creaTicketDaCommunicationEvent(evento: CommunicationEvent) {
     if (!user) return
 
     if (evento.status === "ticket_created" || evento.linked_ticket_id) {
@@ -2024,7 +2458,7 @@ const condominioTarget = condomini.find(
     }
 
     const nuovoTicket: Ticket = {
-      id: Date.now(),
+      id: creaIdLocale(),
       titolo: eventoAggiornato.subject || "Nuova segnalazione",
       descrizione: eventoAggiornato.body || "",
       stato: "Aperto",
@@ -2154,7 +2588,7 @@ const condominioTarget = condomini.find(
   }
 
   // Salva le modifiche manuali a una comunicazione.
-  async function modificaCommunicationEvent(eventoAggiornato: any) {
+  async function modificaCommunicationEvent(eventoAggiornato: CommunicationEvent) {
     if (!user) return
 
     const { error } = await supabase
@@ -2184,7 +2618,7 @@ const condominioTarget = condomini.find(
   }
 
   // Elimina una comunicazione e, se presente, anche il ticket collegato.
-  async function eliminaCommunicationEvent(evento: any) {
+  async function eliminaCommunicationEvent(evento: CommunicationEvent) {
     if (!user) return
 
     apriConferma(
@@ -2268,43 +2702,69 @@ const condominioTarget = condomini.find(
   // Liste calcolate dai condomini caricati, usate nelle pagine globali
   // e nella dashboard.
   // ============================================================
-  const scadenzeGlobali = condomini
+  const scadenzeGlobali: ScadenzaOperativa[] = condomini
     .flatMap((condominio) =>
       (condominio.impianti ?? []).flatMap((impianto) => {
-        const scadenze = []
+        const scadenze: ScadenzaOperativa[] = []
 
         if (impianto.manutenzione) {
+          const dataAvviso = calcolaDataAvviso(
+            impianto.manutenzione,
+            impianto.avviso_manutenzione
+          )
+
           scadenze.push({
             id: `${condominio.id}-${impianto.id}-manutenzione`,
-            condominio: condominio.nome,
+            condominio: nomeCondominio(condominio),
             impianto: impianto.tipo,
             descrizione: impianto.nome,
             tipo: "Manutenzione",
             data: impianto.manutenzione,
+            avviso: impianto.avviso_manutenzione,
+            data_avviso: dataAvviso,
+            stato: getStatoScadenzaDaGiorniAvviso(
+              impianto.manutenzione,
+              impianto.avviso_manutenzione
+            ),
           })
         }
 
         if (impianto.contratto_manutenzione) {
+          const dataAvviso = calcolaDataAvviso(
+            impianto.contratto_manutenzione,
+            impianto.avviso_contratto_manutenzione
+          )
+
           scadenze.push({
             id: `${condominio.id}-${impianto.id}-contratto`,
-            condominio: condominio.nome,
+            condominio: nomeCondominio(condominio),
             impianto: impianto.tipo,
             descrizione: impianto.nome,
             tipo: "Contratto manutenzione",
             data: impianto.contratto_manutenzione,
+            avviso: impianto.avviso_contratto_manutenzione,
+            data_avviso: dataAvviso,
+            stato: getStatoScadenzaDaGiorniAvviso(
+              impianto.contratto_manutenzione,
+              impianto.avviso_contratto_manutenzione
+            ),
           })
         }
 
         return scadenze
       })
     )
-    .sort((a, b) => giorniAllaScadenza(a.data) - giorniAllaScadenza(b.data))
+    .sort(
+      (a, b) =>
+        giorniAllaScadenza(a.data_avviso || a.data) -
+        giorniAllaScadenza(b.data_avviso || b.data)
+    )
 
   const timelineGlobale = condomini
     .flatMap((condominio) =>
       (condominio.timeline ?? []).map((evento) => ({
         ...evento,
-        condominio: condominio.nome,
+        condominio: nomeCondominio(condominio),
         indirizzo: condominio.indirizzo,
       }))
     )
@@ -2320,7 +2780,8 @@ const condominioTarget = condomini.find(
     .flatMap((condominio) =>
       (condominio.ticket ?? []).map((ticket) => ({
         ...ticket,
-        condominio: condominio.nome,
+        condominio_id: condominio.id,
+        condominio: nomeCondominio(condominio),
         indirizzo: condominio.indirizzo,
       }))
     )
@@ -2331,7 +2792,7 @@ const condominioTarget = condomini.find(
       (condominio.documenti ?? []).map((documento) => ({
         ...documento,
         condominio_id: condominio.id,
-        condominio: condominio.nome,
+        condominio: nomeCondominio(condominio),
         indirizzo: condominio.indirizzo,
       }))
     )
@@ -2343,61 +2804,58 @@ const condominioTarget = condomini.find(
   
 
   const documentiFiltrati = documentiGlobali.filter((documento) => {
-    const testo = `${documento.titolo} ${documento.note} ${documento.categoria} ${documento.condominio} ${documento.indirizzo}`.toLowerCase()
+  const testo = `
+    ${documento.titolo}
+    ${documento.note}
+    ${documento.categoria}
+    ${documento.condominio}
+    ${documento.indirizzo}
+    ${documento.file_name}
+    ${documento.ocr_text}
+    ${documento.ai_summary}
+    ${documento.ai_category}
+    ${(documento.ai_extracted_dates ?? []).join(" ")}
+    ${(documento.ai_extracted_amounts ?? []).join(" ")}
+  `.toLowerCase()
 
-    const matchRicerca = testo.includes(ricercaDocumenti.toLowerCase())
+  const matchRicerca = testo.includes(ricercaDocumenti.toLowerCase())
 
-    const matchCategoria =
-      categoriaDocumenti === "Tutte" || documento.categoria === categoriaDocumenti
+  const matchCategoria =
+    categoriaDocumenti === "Tutte" || documento.categoria === categoriaDocumenti
 
-    return matchRicerca && matchCategoria
-  })
+  return matchRicerca && matchCategoria
+})
 
   const condominiFiltrati = condomini.filter((condominio: Condominio) => {
     const testo =
-      `${condominio.nome} ${condominio.indirizzo} ${condominio.comune}`.toLowerCase()
+      `${nomeCondominio(condominio)} ${condominio.indirizzo} ${condominio.comune}`.toLowerCase()
 
     return testo.includes(ricercaCondomini.toLowerCase())
   })
 
-  const attivitaRecenti = [
-    ...ticketGlobali.map((ticket) => ({
-      id: `ticket-${ticket.condominio}-${ticket.id}`,
-      tipo: "Ticket",
-      titolo: ticket.titolo,
-      descrizione: ticket.descrizione,
-      condominio: ticket.condominio,
-      data: ticket.data,
-    })),
+  const fornitoriFiltrati = fornitori.filter((fornitore) => {
+    const condominio = condomini.find(
+      (item) => item.id === fornitore.condominio_id
+    )
+    const testo = `
+      ${fornitore.nome}
+      ${fornitore.cognome}
+      ${fornitore.partita_iva}
+      ${fornitore.telefono}
+      ${fornitore.iban}
+      ${fornitore.mansione}
+      ${nomeCondominio(condominio, "")}
+    `.toLowerCase()
 
-    ...documentiGlobali.map((documento) => ({
-      id: `documento-${documento.condominio}-${documento.id}`,
-      tipo: "Documento",
-      titolo: documento.titolo,
-      descrizione: documento.categoria,
-      condominio: documento.condominio,
-      data: documento.data || "",
-    })),
-
-    ...timelineGlobale.map((evento) => ({
-      id: `timeline-${evento.condominio}-${evento.id}`,
-      tipo: evento.tipo,
-      titolo: evento.titolo,
-      descrizione: evento.descrizione,
-      condominio: evento.condominio,
-      data: evento.data,
-    })),
-  ]
-    .filter((attivita) => attivita.data)
-    .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
-    .slice(0, 6)
+    return testo.includes(ricercaFornitori.toLowerCase())
+  })
 
   const risultatiRicercaGlobale = ricercaGlobale.trim()
     ? [
         ...condomini.map((condominio) => ({
           id: `condominio-${condominio.id}`,
           tipo: "Condominio",
-          titolo: condominio.nome,
+          titolo: nomeCondominio(condominio),
           descrizione: `${condominio.indirizzo} · ${condominio.comune}`,
         })),
 
@@ -2415,6 +2873,16 @@ const condominioTarget = condomini.find(
           descrizione: `${documento.condominio} · ${documento.categoria}`,
         })),
 
+        ...fornitori.map((fornitore) => ({
+          id: `fornitore-${fornitore.id}`,
+          tipo: "Fornitore",
+          titolo: `${fornitore.nome} ${fornitore.cognome}`,
+          descrizione: `${fornitore.mansione} · ${nomeCondominio(
+            condomini.find((c) => c.id === fornitore.condominio_id),
+            "Nessun condominio"
+          )}`,
+        })),
+
         ...timelineGlobale.map((evento) => ({
           id: `timeline-${evento.condominio}-${evento.id}`,
           tipo: evento.tipo,
@@ -2428,28 +2896,6 @@ const condominioTarget = condomini.find(
         return testo.includes(ricercaGlobale.toLowerCase())
       })
     : []
-
-  const notificheOperative = [
-    ...scadenzeGlobali
-      .filter((s) => giorniAllaScadenza(s.data) <= 30)
-      .map((s) => ({
-        id: `scadenza-${s.id}`,
-        tipo: "Scadenza urgente",
-        titolo: `${s.impianto} · ${s.condominio}`,
-        descrizione: `${s.tipo} in scadenza il ${s.data}`,
-        livello: "urgente",
-      })),
-
-    ...ticketGlobali
-      .filter((t) => t.priorita === "Alta" && t.stato !== "Chiuso")
-      .map((t) => ({
-        id: `ticket-${t.id}`,
-        tipo: "Ticket prioritario",
-        titolo: t.titolo,
-        descrizione: `${t.condominio} · ${t.stato}`,
-        livello: "warning",
-      })),
-  ].slice(0, 8)
 
   // ============================================================
   // RENDER: DETTAGLIO CONDOMINIO
@@ -2466,7 +2912,7 @@ const condominioTarget = condomini.find(
         </button>
 
         <p className="eyebrow">Condominio</p>
-        <h1>{selectedCondominio.nome}</h1>
+        <h1>{nomeCondominio(selectedCondominio)}</h1>
 
         <p className="subtitle">
           {selectedCondominio.indirizzo} – {selectedCondominio.comune}
@@ -2478,59 +2924,115 @@ const condominioTarget = condomini.find(
             <p>Gestione impianti del fabbricato</p>
 
             <div className="impianti-form">
-              <select
-                value={nuovoImpianto.tipo}
-                onChange={(e) =>
-                  setNuovoImpianto({ ...nuovoImpianto, tipo: e.target.value })
-                }
-              >
-                <option value="">Seleziona impianto</option>
-                {impiantiDisponibili.map((impianto) => (
-                  <option key={impianto} value={impianto}>
-                    {impianto}
-                  </option>
-                ))}
-              </select>
+              <label className="inline-field">
+                <span>Tipo impianto</span>
+                <select
+                  value={nuovoImpianto.tipo}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      tipo: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">Seleziona impianto</option>
+                  {impiantiDisponibili.map((impianto) => (
+                    <option key={impianto} value={impianto}>
+                      {impianto}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              <input
-                placeholder="Nome/descrizione"
-                value={nuovoImpianto.nome}
-                onChange={(e) =>
-                  setNuovoImpianto({ ...nuovoImpianto, nome: e.target.value })
-                }
-              />
+              <label className="inline-field">
+                <span>Nome o descrizione</span>
+                <input
+                  placeholder="Es. Ascensore scala A"
+                  value={nuovoImpianto.nome}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      nome: e.target.value,
+                    })
+                  }
+                />
+              </label>
 
-              <input
-                type="date"
-                value={nuovoImpianto.manutenzione}
-                onChange={(e) =>
-                  setNuovoImpianto({
-                    ...nuovoImpianto,
-                    manutenzione: e.target.value,
-                  })
-                }
-              />
+              <label className="inline-field">
+                <span>Manutenzione periodica</span>
+                <input
+                  type="date"
+                  value={nuovoImpianto.manutenzione}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      manutenzione: e.target.value,
+                    })
+                  }
+                />
+              </label>
 
-              <input
-                type="date"
-                value={nuovoImpianto.contratto_manutenzione}
-                onChange={(e) =>
-                  setNuovoImpianto({
-                    ...nuovoImpianto,
-                    contratto_manutenzione: e.target.value,
-                  })
-                }
-              />
+              <label className="inline-field">
+                <span>Avviso manutenzione (giorni)</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={3}
+                  placeholder="30"
+                  value={nuovoImpianto.avviso_manutenzione}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      avviso_manutenzione: normalizzaGiorniAvviso(
+                        e.target.value
+                      ),
+                    })
+                  }
+                />
+              </label>
 
-              <button onClick={aggiungiImpianto}>Aggiungi impianto</button>
+              <label className="inline-field">
+                <span>Fine contratto</span>
+                <input
+                  type="date"
+                  value={nuovoImpianto.contratto_manutenzione}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      contratto_manutenzione: e.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              <label className="inline-field">
+                <span>Avviso contratto (giorni)</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={3}
+                  placeholder="30"
+                  value={nuovoImpianto.avviso_contratto_manutenzione}
+                  onChange={(e) =>
+                    setNuovoImpianto({
+                      ...nuovoImpianto,
+                      avviso_contratto_manutenzione: normalizzaGiorniAvviso(
+                        e.target.value
+                      ),
+                    })
+                  }
+                />
+              </label>
+
+              <button className="impianti-submit" onClick={aggiungiImpianto}>
+                Aggiungi impianto
+              </button>
             </div>
 
             <div className="impianti-list">
               {(selectedCondominio.impianti ?? []).map((impianto) => (
                 <div
-                  className={`impianto-row ${getStatoScadenza(
-                    impianto.manutenzione
-                  )}`}
+                  className={`impianto-row ${statoImpianto(impianto)}`}
                   key={impianto.id}
                 >
                   {editingImpiantoId === impianto.id ? (
@@ -2569,7 +3071,7 @@ const condominioTarget = condomini.find(
 
                       <input
                         type="date"
-                        value={impianto.manutenzione}
+                        value={impianto.manutenzione || ""}
                         onChange={(e) => {
                           const aggiornato = {
                             ...selectedCondominio,
@@ -2585,8 +3087,32 @@ const condominioTarget = condomini.find(
                       />
 
                       <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
+                        placeholder="Giorni"
+                        value={impianto.avviso_manutenzione || ""}
+                        onChange={(e) => {
+                          const aggiornato = {
+                            ...selectedCondominio,
+                            impianti: (selectedCondominio.impianti ?? []).map(
+                              (i) =>
+                                i.id === impianto.id
+                                  ? {
+                                      ...i,
+                                      avviso_manutenzione:
+                                        normalizzaGiorniAvviso(e.target.value),
+                                    }
+                                  : i
+                            ),
+                          }
+                          setSelectedCondominio(aggiornato)
+                        }}
+                      />
+
+                      <input
                         type="date"
-                        value={impianto.contratto_manutenzione}
+                        value={impianto.contratto_manutenzione || ""}
                         onChange={(e) => {
                           const aggiornato = {
                             ...selectedCondominio,
@@ -2596,6 +3122,30 @@ const condominioTarget = condomini.find(
                                   ? {
                                       ...i,
                                       contratto_manutenzione: e.target.value,
+                                    }
+                                  : i
+                            ),
+                          }
+                          setSelectedCondominio(aggiornato)
+                        }}
+                      />
+
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
+                        placeholder="Giorni"
+                        value={impianto.avviso_contratto_manutenzione || ""}
+                        onChange={(e) => {
+                          const aggiornato = {
+                            ...selectedCondominio,
+                            impianti: (selectedCondominio.impianti ?? []).map(
+                              (i) =>
+                                i.id === impianto.id
+                                  ? {
+                                      ...i,
+                                      avviso_contratto_manutenzione:
+                                        normalizzaGiorniAvviso(e.target.value),
                                     }
                                   : i
                             ),
@@ -2614,7 +3164,19 @@ const condominioTarget = condomini.find(
                       <span>{impianto.nome || "Nessuna descrizione"}</span>
                       <small>Manutenzione: {impianto.manutenzione || "—"}</small>
                       <small>
-                        Contratto: {impianto.contratto_manutenzione || "—"}
+                        Avviso manutenzione:{" "}
+                        {impianto.avviso_manutenzione
+                          ? `${impianto.avviso_manutenzione} giorni prima`
+                          : "—"}
+                      </small>
+                      <small>
+                        Fine contratto: {impianto.contratto_manutenzione || "—"}
+                      </small>
+                      <small>
+                        Avviso contratto:{" "}
+                        {impianto.avviso_contratto_manutenzione
+                          ? `${impianto.avviso_contratto_manutenzione} giorni prima`
+                          : "—"}
                       </small>
 
                       <button
@@ -3220,7 +3782,7 @@ const condominioTarget = condomini.find(
           ) : (
             scadenzeGlobali.map((scadenza) => (
               <div
-                className={`scadenza-row ${getStatoScadenza(scadenza.data)}`}
+                className={`scadenza-row ${scadenza.stato}`}
                 key={scadenza.id}
               >
                 <div>
@@ -3235,7 +3797,18 @@ const condominioTarget = condomini.find(
 
                 <div>
                   <strong>{scadenza.data}</strong>
-                  <span>{giorniAllaScadenza(scadenza.data)} giorni</span>
+                  <span>
+                    Avviso:{" "}
+                    {scadenza.avviso
+                      ? `${scadenza.avviso} giorni prima`
+                      : "Non impostato"}
+                  </span>
+                  {scadenza.data_avviso ? (
+                    <span>Data avviso: {scadenza.data_avviso}</span>
+                  ) : null}
+                  <span>
+                    {giorniAllaScadenza(scadenza.data_avviso || scadenza.data)} giorni
+                  </span>
                 </div>
               </div>
             ))
@@ -3303,31 +3876,24 @@ const condominioTarget = condomini.find(
           {ticketGlobali.length === 0 ? (
             <div className="empty-state">Nessun ticket presente.</div>
           ) : (
-            ticketGlobali.map((ticket) => (
+            ticketGlobali.map((ticket) => {
+              const ticketKey = ticketGlobaleKey(ticket)
+
+              return (
               <div
                 className={`ticket-row ${ticket.stato
                   .toLowerCase()
                   .replace(" ", "-")}`}
-                key={`${ticket.condominio}-${ticket.id}`}
+                key={ticketKey}
               >
-                {editingGlobalTicketId === ticket.id ? (
+                {editingGlobalTicketKey === ticketKey ? (
                   <>
                     <select
                       value={ticket.priorita}
                       onChange={(e) =>
-                        setCondomini((prev) =>
-                          prev.map((condominio) => ({
-                            ...condominio,
-                            ticket: (condominio.ticket ?? []).map((t) =>
-                              t.id === ticket.id
-                                ? {
-                                    ...t,
-                                    priorita: e.target.value as Ticket["priorita"],
-                                  }
-                                : t
-                            ),
-                          }))
-                        )
+                        aggiornaTicketGlobaleDraft(ticket, {
+                          priorita: e.target.value as Ticket["priorita"],
+                        })
                       }
                     >
                       <option value="Bassa">Bassa</option>
@@ -3339,51 +3905,27 @@ const condominioTarget = condomini.find(
                       <input
                         value={ticket.titolo}
                         onChange={(e) =>
-                          setCondomini((prev) =>
-                            prev.map((condominio) => ({
-                              ...condominio,
-                              ticket: (condominio.ticket ?? []).map((t) =>
-                                t.id === ticket.id
-                                  ? { ...t, titolo: e.target.value }
-                                  : t
-                              ),
-                            }))
-                          )
+                          aggiornaTicketGlobaleDraft(ticket, {
+                            titolo: e.target.value,
+                          })
                         }
                       />
 
                       <textarea
                         value={ticket.descrizione}
                         onChange={(e) =>
-                          setCondomini((prev) =>
-                            prev.map((condominio) => ({
-                              ...condominio,
-                              ticket: (condominio.ticket ?? []).map((t) =>
-                                t.id === ticket.id
-                                  ? { ...t, descrizione: e.target.value }
-                                  : t
-                              ),
-                            }))
-                          )
+                          aggiornaTicketGlobaleDraft(ticket, {
+                            descrizione: e.target.value,
+                          })
                         }
                       />
 
                       <select
                         value={ticket.stato}
                         onChange={(e) =>
-                          setCondomini((prev) =>
-                            prev.map((condominio) => ({
-                              ...condominio,
-                              ticket: (condominio.ticket ?? []).map((t) =>
-                                t.id === ticket.id
-                                  ? {
-                                      ...t,
-                                      stato: e.target.value as Ticket["stato"],
-                                    }
-                                  : t
-                              ),
-                            }))
-                          )
+                          aggiornaTicketGlobaleDraft(ticket, {
+                            stato: e.target.value as Ticket["stato"],
+                          })
                         }
                       >
                         <option value="Aperto">Aperto</option>
@@ -3394,16 +3936,14 @@ const condominioTarget = condomini.find(
                       <div className="document-actions">
                         <button
                           className="secondary small"
-                          onClick={() =>
-                            modificaTicketGlobale(ticket, ticket.condominio)
-                          }
+                          onClick={() => modificaTicketGlobale(ticket)}
                         >
                           Salva
                         </button>
 
                         <button
                           className="danger-button small"
-                          onClick={() => setEditingGlobalTicketId(null)}
+                          onClick={() => setEditingGlobalTicketKey(null)}
                         >
                           Annulla
                         </button>
@@ -3425,7 +3965,7 @@ const condominioTarget = condomini.find(
                       <div className="document-actions">
                         <button
                           className="secondary small"
-                          onClick={() => setEditingGlobalTicketId(ticket.id)}
+                          onClick={() => setEditingGlobalTicketKey(ticketKey)}
                         >
                           Modifica
                         </button>
@@ -3441,7 +3981,341 @@ const condominioTarget = condomini.find(
                   </>
                 )}
               </div>
-            ))
+              )
+            })
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  if (page === "fornitori") {
+    return renderSaasLayout(
+      <section className="page-view fornitori-page">
+        <div className="fornitori-hero">
+          <div>
+            <p className="eyebrow">Anagrafiche</p>
+            <h1>Fornitori</h1>
+            <p className="subtitle">
+              Rubrica operativa dei fornitori dello studio, con mansione e
+              condominio seguito.
+            </p>
+          </div>
+        </div>
+
+        <div className="dashboard-card fornitori-form-card">
+          <span className="eyebrow">Nuovo fornitore</span>
+          <div className="fornitori-form">
+            <input
+              placeholder="Nome"
+              value={fornitoreForm.nome}
+              onChange={(e) =>
+                setFornitoreForm({ ...fornitoreForm, nome: e.target.value })
+              }
+            />
+
+            <input
+              placeholder="Cognome"
+              value={fornitoreForm.cognome}
+              onChange={(e) =>
+                setFornitoreForm({ ...fornitoreForm, cognome: e.target.value })
+              }
+            />
+
+            <input
+              placeholder="Partita IVA es. 01234567890"
+              inputMode="numeric"
+              maxLength={11}
+              pattern="[0-9]{0,11}"
+              value={fornitoreForm.partita_iva}
+              onChange={(e) =>
+                setFornitoreForm({
+                  ...fornitoreForm,
+                  partita_iva: normalizzaPartitaIva(e.target.value),
+                })
+              }
+            />
+
+            <input
+              placeholder="Telefono es. 3470000000"
+              type="tel"
+              inputMode="numeric"
+              maxLength={11}
+              pattern="[0-9]{0,11}"
+              value={fornitoreForm.telefono}
+              onChange={(e) =>
+                setFornitoreForm({
+                  ...fornitoreForm,
+                  telefono: normalizzaTelefonoItalia(e.target.value),
+                })
+              }
+            />
+
+            <input
+              placeholder="IBAN es. IT60X0542811101000000123456"
+              inputMode="text"
+              maxLength={27}
+              pattern="IT[0-9]{2}[A-Z][0-9]{10}[A-Z0-9]{12}"
+              value={fornitoreForm.iban}
+              onChange={(e) =>
+                setFornitoreForm({
+                  ...fornitoreForm,
+                  iban: normalizzaIbanItalia(e.target.value),
+                })
+              }
+            />
+
+            <input
+              placeholder="Mansione es. Idraulico"
+              value={fornitoreForm.mansione}
+              onChange={(e) =>
+                setFornitoreForm({
+                  ...fornitoreForm,
+                  mansione: e.target.value,
+                })
+              }
+            />
+
+            <select
+              value={fornitoreForm.condominio_id}
+              onChange={(e) =>
+                setFornitoreForm({
+                  ...fornitoreForm,
+                  condominio_id: e.target.value ? Number(e.target.value) : "",
+                })
+              }
+            >
+              <option value="">Condominio seguito</option>
+              {condomini.map((condominio) => (
+                <option key={condominio.id} value={condominio.id}>
+                  {nomeCondominio(condominio)}
+                </option>
+              ))}
+            </select>
+
+            <button type="button" onClick={creaFornitore}>
+              Salva fornitore
+            </button>
+          </div>
+        </div>
+
+        <input
+          className="search-input"
+          placeholder="Cerca fornitore per nome, mansione, partita IVA o condominio..."
+          value={ricercaFornitori}
+          onChange={(e) => setRicercaFornitori(e.target.value)}
+        />
+
+        <div className="fornitori-grid">
+          {fornitoriFiltrati.length === 0 ? (
+            <div className="empty-state">Nessun fornitore presente.</div>
+          ) : (
+            fornitoriFiltrati.map((fornitore) => {
+              const condominio = condomini.find(
+                (item) => item.id === fornitore.condominio_id
+              )
+
+              return (
+                <div className="fornitore-card" key={fornitore.id}>
+                  {editingFornitoreId === fornitore.id ? (
+                    <>
+                      <div className="fornitori-form">
+                        <input
+                          placeholder="Nome"
+                          value={fornitore.nome}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? { ...item, nome: e.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <input
+                          placeholder="Cognome"
+                          value={fornitore.cognome}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? { ...item, cognome: e.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <input
+                          placeholder="Partita IVA es. 01234567890"
+                          inputMode="numeric"
+                          maxLength={11}
+                          pattern="[0-9]{0,11}"
+                          value={fornitore.partita_iva}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? {
+                                      ...item,
+                                      partita_iva: normalizzaPartitaIva(
+                                        e.target.value
+                                      ),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <input
+                          placeholder="Telefono es. 3470000000"
+                          type="tel"
+                          inputMode="numeric"
+                          maxLength={11}
+                          pattern="[0-9]{0,11}"
+                          value={fornitore.telefono}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? {
+                                      ...item,
+                                      telefono: normalizzaTelefonoItalia(
+                                        e.target.value
+                                      ),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <input
+                          placeholder="IBAN es. IT60X0542811101000000123456"
+                          inputMode="text"
+                          maxLength={27}
+                          pattern="IT[0-9]{2}[A-Z][0-9]{10}[A-Z0-9]{12}"
+                          value={fornitore.iban}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? {
+                                      ...item,
+                                      iban: normalizzaIbanItalia(e.target.value),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <input
+                          placeholder="Mansione es. Idraulico"
+                          value={fornitore.mansione}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? { ...item, mansione: e.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+
+                        <select
+                          value={fornitore.condominio_id ?? ""}
+                          onChange={(e) =>
+                            setFornitori((prev) =>
+                              prev.map((item) =>
+                                item.id === fornitore.id
+                                  ? {
+                                      ...item,
+                                      condominio_id: e.target.value
+                                        ? Number(e.target.value)
+                                        : null,
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        >
+                          <option value="">Nessun condominio</option>
+                          {condomini.map((condominio) => (
+                            <option key={condominio.id} value={condominio.id}>
+                              {nomeCondominio(condominio)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="document-actions">
+                        <button
+                          className="secondary small"
+                          type="button"
+                          onClick={() => modificaFornitore(fornitore)}
+                        >
+                          Salva
+                        </button>
+
+                        <button
+                          className="danger-button small"
+                          type="button"
+                          onClick={() => setEditingFornitoreId(null)}
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="fornitore-card-header">
+                        <div>
+                          <span className="eyebrow">Fornitore</span>
+                          <h2>
+                            {fornitore.nome} {fornitore.cognome}
+                          </h2>
+                        </div>
+
+                        <strong>{fornitore.mansione || "Mansione non indicata"}</strong>
+                      </div>
+
+                      <div className="fornitore-details">
+                        <span>Partita IVA: {fornitore.partita_iva || "—"}</span>
+                        <span>Telefono: {fornitore.telefono || "—"}</span>
+                        <span>IBAN: {fornitore.iban || "—"}</span>
+                        <span>
+                          Condominio:{" "}
+                          {nomeCondominio(condominio, "Non assegnato")}
+                        </span>
+                      </div>
+
+                      <div className="document-actions">
+                        <button
+                          className="secondary small"
+                          type="button"
+                          onClick={() => setEditingFornitoreId(fornitore.id)}
+                        >
+                          Modifica
+                        </button>
+
+                        <button
+                          className="danger-button small"
+                          type="button"
+                          onClick={() => eliminaFornitore(fornitore.id)}
+                        >
+                          Elimina
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       </section>
@@ -3562,6 +4436,12 @@ const condominioTarget = condomini.find(
                       <p>{documento.ai_summary}</p>
                     </div>
                   ) : null}
+                  {documento.ocr_text ? (
+                  <details className="documento-ocr-details">
+                    <summary>Testo OCR rilevato</summary>
+                    <p>{documento.ocr_text}</p>
+                  </details>
+                ) : null}
                 </div>
 
                 {documento.file_path ? (
@@ -3699,13 +4579,17 @@ const condominioTarget = condomini.find(
               {editingCondominioId === condominio.id ? (
                 <>
                   <input
-                    value={condominio.nome}
+                    value={nomeCondominio(condominio)}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) =>
                       setCondomini((prev) =>
                         prev.map((c) =>
                           c.id === condominio.id
-                            ? { ...c, nome: e.target.value }
+                            ? {
+                                ...c,
+                                nome: e.target.value,
+                                nome_condominio: e.target.value,
+                              }
                             : c
                         )
                       )
@@ -3751,7 +4635,7 @@ const condominioTarget = condomini.find(
                 </>
               ) : (
                 <>
-                  <h2>{condominio.nome}</h2>
+                  <h2>{nomeCondominio(condominio)}</h2>
                   <p>{condominio.indirizzo}</p>
                   <p>{condominio.comune}</p>
 
@@ -3960,76 +4844,11 @@ const condominioTarget = condomini.find(
     )
   }
 
-  if (page === "integrazioni") {
+  if (page === "comunicazioni") {
     return renderSaasLayout(
       <section className="page-view">
         <p className="eyebrow">Connessioni</p>
-        <h1>Integrazioni</h1>
-
-        <p className="subtitle">
-          Gestisci il gestionale principale collegato allo studio.
-        </p>
-
-        <div className="dashboard-card integration-card">
-          <div>
-            <span className="eyebrow">Gestionale principale</span>
-
-            <h2>
-              {gestionaleAttivo
-                ? gestionaleAttivo.provider.toUpperCase()
-                : "Nessun gestionale collegato"}
-            </h2>
-
-            <p>
-              {gestionaleAttivo
-                ? `Stato: ${gestionaleAttivo.status} · Modalità: ${gestionaleAttivo.connection_mode}`
-                : "Collega Danea, TeamSystem o Zucchetti per iniziare la sincronizzazione."}
-            </p>
-
-            <p>
-              Ultima sincronizzazione:{" "}
-              {gestionaleAttivo?.last_sync_at
-                ? new Date(gestionaleAttivo.last_sync_at).toLocaleString("it-IT")
-                : "Mai eseguita"}
-            </p>
-
-            <div className="integration-status-row">
-              <span
-                className={`integration-status-badge ${
-                  gestionaleAttivo?.status === "connected"
-                    ? "connected"
-                    : "disconnected"
-                }`}
-              >
-                {gestionaleAttivo?.status === "connected"
-                  ? "Connesso"
-                  : "Non collegato"}
-              </span>
-
-              {gestionaleAttivo && (
-                <button className="danger-button" onClick={scollegaGestionale}>
-                  Scollega
-                </button>
-              )}
-
-              {gestionaleAttivo && (
-                <button
-                  className="premium-save-button integration-button"
-                  onClick={sincronizzaGestionaleAttivo}
-                >
-                  Sincronizza ora
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button
-            className="premium-save-button integration-button"
-            onClick={() => setShowGestionaleModal(true)}
-          >
-            {gestionaleAttivo ? "Cambia gestionale" : "Collega gestionale"}
-          </button>
-        </div>
+        <h1>Comunicazioni</h1>
 
         <div className="dashboard-card">
           <div>
@@ -4146,20 +4965,29 @@ const condominioTarget = condomini.find(
                     </>
                   ) : (
                     <>
-                      <span className={`communication-channel ${evento.channel}`}>
-                        {evento.channel}
-                      </span>
-
-                      <div>
-                        <strong>{evento.subject || "Senza oggetto"}</strong>
+                      <div className="communication-top-row">
+                        <span className={`communication-channel ${evento.channel}`}>
+                          {evento.channel === "email" && "EMAIL"}
+                          {evento.channel === "pec" && "PEC"}
+                          {evento.channel === "whatsapp" && "WHATSAPP"}
+                          {evento.channel === "phone" && "TELEFONO"}
+                        </span>
 
                         <span
                           className={`communication-priority ${
                             evento.priority || "media"
                           }`}
                         >
-                          Priorità {evento.priority || "media"}
+                          {evento.priority === "alta" && "Alta priorità"}
+                          {evento.priority === "media" && "Media priorità"}
+                          {evento.priority === "bassa" && "Bassa priorità"}
                         </span>
+                      </div>
+
+                      <div>
+                        <h3 className="communication-title">
+                          {evento.subject || "Senza oggetto"}
+                        </h3>
 
                         {(evento.status === "ticket_created" ||
                           evento.linked_ticket_id) && (
@@ -4168,12 +4996,16 @@ const condominioTarget = condomini.find(
                           </span>
                         )}
 
-                        <p>{evento.body || "Nessun contenuto disponibile."}</p>
+                        <p className="communication-body">
+                          {evento.body || "Nessun contenuto disponibile."}
+                        </p>
 
                         <small>
                           {evento.sender || "Mittente sconosciuto"} ·{" "}
-                          {condomini.find((c) => c.id === evento.condominio_id)
-                            ?.nome || "Nessun condominio associato"}{" "}
+                          {nomeCondominio(
+                            condomini.find((c) => c.id === evento.condominio_id),
+                            "Nessun condominio associato"
+                          )}{" "}
                           · {new Date(evento.created_at).toLocaleString("it-IT")}
                         </small>
 
@@ -4223,6 +5055,138 @@ const condominioTarget = condomini.find(
     )
   }
 
+    if (page === "impostazioni") {
+    return renderSaasLayout(
+      <section className="page-view">
+        <div className="settings-hero">
+          <div>
+            <p className="eyebrow">Control Center</p>
+
+            <h1>Impostazioni studio</h1>
+
+            <p className="subtitle">
+              Configura il gestionale, le integrazioni operative,
+              il tema dell’interfaccia e i moduli premium.
+            </p>
+          </div>
+
+          <div className="settings-status-badge">
+            Sistema operativo attivo
+          </div>
+        </div>
+
+        <div className="settings-grid">
+          <div className="dashboard-card settings-card">
+            <span className="eyebrow">Aspetto</span>
+            <h2>Tema interfaccia</h2>
+            <p>Scegli la modalità visiva del gestionale.</p>
+
+            <div className="settings-actions">
+              <button
+                className={`secondary small ${temaInterfaccia === "dark" ? "active-setting" : ""}`}
+                onClick={() => setTemaInterfaccia("dark")}
+              >
+                Tema scuro
+              </button>
+
+              <button
+                className={`secondary small ${temaInterfaccia === "light" ? "active-setting" : ""}`}
+                onClick={() => setTemaInterfaccia("light")}
+              >
+                Tema chiaro
+              </button>
+            </div>
+
+            <small className="settings-note">
+              Il tema chiaro usa contrasto alto, accenti arancio e hover
+              dedicati.
+            </small>
+          </div>
+
+          <div className="dashboard-card settings-card">
+            <span className="eyebrow">Integrazioni</span>
+            <h2>Gestionale principale</h2>
+
+            <p>
+              {gestionaleAttivo
+                ? `Gestionale collegato: ${
+                    gestionaleAttivo.provider === "danea"
+                      ? "Danea Domustudio"
+                      : gestionaleAttivo.provider.toUpperCase()
+                  }`
+                : "Nessun gestionale collegato."}
+            </p>
+
+            <p>
+              Ultima sincronizzazione:{" "}
+              {gestionaleAttivo?.last_sync_at
+                ? new Date(gestionaleAttivo.last_sync_at).toLocaleString("it-IT")
+                : "Mai eseguita"}
+            </p>
+
+            <div className="settings-actions">
+              <button
+                className="premium-save-button"
+                onClick={() => {
+                  setGestionaleSelezionato("danea")
+                  setApiKeyGestionale("")
+                  setShowGestionaleModal(true)
+                }}
+              >
+                {gestionaleAttivo ? "Modifica Danea" : "Collega Danea"}
+              </button>
+
+              {gestionaleAttivo && (
+                <button
+                  className="secondary"
+                  onClick={sincronizzaGestionaleAttivo}
+                >
+                  Sincronizza ora
+                </button>
+              )}
+
+              {gestionaleAttivo && (
+                <button className="danger-button" onClick={scollegaGestionale}>
+                  Scollega
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="dashboard-card settings-card">
+            <span className="eyebrow">Abbonamento</span>
+            <h2>Piano attuale</h2>
+            <p>
+              Piano Free / Demo attivo. In futuro qui verranno gestiti upgrade,
+              limiti, fatturazione e moduli premium.
+            </p>
+
+            <div className="subscription-plan-card">
+              <div>
+                <strong>Studio Base</strong>
+                <span>Funzioni MVP abilitate</span>
+              </div>
+
+              <div className="subscription-badge">
+                ATTIVO
+              </div>
+            </div>
+
+            <div className="settings-actions">
+              <button className="premium-save-button">
+                Gestisci abbonamento
+              </button>
+
+              <button className="secondary">
+                Vedi piani
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   if (page !== "home") {
     return renderSaasLayout(
       <section className="page-view">
@@ -4242,22 +5206,21 @@ const condominioTarget = condomini.find(
   // ============================================================
   return renderSaasLayout(
     <Dashboard
-      setPage={setPage}
+      setPage={(nuovaPagina) => {
+        setSelectedCondominio(null)
+        setPage(nuovaPagina)
+      }}
       ticketAperti={ticketGlobali.filter((t) => t.stato !== "Chiuso").length}
-      scadenzeUrgenti={
-        scadenzeGlobali.filter((s) => giorniAllaScadenza(s.data) <= 30).length
+      urgenze={
+        scadenzeGlobali.filter(
+          (s) => s.stato === "rosso" || s.stato === "arancione"
+        ).length
       }
-      condominiTotali={condomini.length}
-      documentiTotali={documentiGlobali.length}
       scadenzeTotali={scadenzeGlobali.length}
-      scadenzeProssime={scadenzeGlobali.slice(0, 5)}
-      attivitaRecenti={attivitaRecenti}
+      scadenzeGlobali={scadenzeGlobali}
       ricercaGlobale={ricercaGlobale}
       setRicercaGlobale={setRicercaGlobale}
       risultatiRicercaGlobale={risultatiRicercaGlobale}
-      notificheOperative={notificheOperative}
-      onSyncDanea={sincronizzaDanea}
-      onOpenGestionaleModal={() => setShowGestionaleModal(true)}
     />
   )
 }

@@ -1,4 +1,7 @@
 
+[auth]
+enable_signup = false
+
 [functions.invia-scadenze]
 enabled = true
 verify_jwt = true

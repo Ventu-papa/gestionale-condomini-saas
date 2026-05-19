@@ -1,4 +1,4 @@
-// Componente schermata login / registrazione
+// Componente schermata login
 
 import { supabase } from "../supabase"
 
@@ -16,13 +16,27 @@ type LoginPageProps = {
 }
 
 function LoginPage({ form, setForm }: LoginPageProps) {
+  async function accedi() {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: form.email.trim(),
+      password: form.password,
+    })
+
+    if (error) {
+      alert("Accesso non riuscito. Controlla email e password.")
+    }
+  }
+
   return (
-    <main className="login-page">
+    <main className="login-page" translate="no">
       <section className="login-card">
         <p className="eyebrow">Gestionale Studio</p>
         <h1>Accedi alla piattaforma</h1>
         <p className="login-subtitle">
           Gestisci condomìni, comunicazioni, documenti e scadenze in un unico ambiente operativo.
+        </p>
+        <p className="login-access-note">
+          L'accesso è riservato agli account abilitati dallo studio.
         </p>
 
         <div className="login-form">
@@ -39,36 +53,17 @@ function LoginPage({ form, setForm }: LoginPageProps) {
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                supabase.auth.signInWithPassword({
-                  email: form.email,
-                  password: form.password,
-                })
+                accedi()
               }
             }}
           />
 
           <div className="login-actions">
             <button
-              onClick={async () => {
-                await supabase.auth.signInWithPassword({
-                  email: form.email,
-                  password: form.password,
-                })
-              }}
+              onClick={accedi}
+              disabled={!form.email.trim() || !form.password}
             >
               Accedi
-            </button>
-
-            <button
-              className="secondary"
-              onClick={async () => {
-                await supabase.auth.signUp({
-                  email: form.email,
-                  password: form.password,
-                })
-              }}
-            >
-              Registrati
             </button>
           </div>
         </div>

@@ -11,6 +11,34 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 
+type Impianto = {
+  tipo?: string
+  nome?: string
+  manutenzione?: string
+  contratto_manutenzione?: string
+}
+
+type Condominio = {
+  nome?: string
+  nome_condominio?: string
+  email_notifiche?: string
+  impianti?: Impianto[]
+}
+
+type ScadenzaUrgente = {
+  condominio: string
+  impianto: string
+  descrizione: string
+  tipo: string
+  data: string
+  giorni: number
+  email: string
+}
+
+function nomeCondominio(condominio: Condominio) {
+  return condominio.nome || condominio.nome_condominio || "Condominio"
+}
+
 function giorniAllaScadenza(data: string) {
   const oggi = new Date()
   const scadenza = new Date(data)
@@ -40,44 +68,48 @@ Deno.serve(async () => {
 
   const scadenzeUrgenti =
     condomini
-      ?.flatMap((condominio: any) =>
-        (condominio.impianti ?? []).flatMap((impianto: any) => {
-          const scadenze = []
+      ?.flatMap((condominio: Condominio) =>
+        (condominio.impianti ?? []).flatMap((impianto) => {
+          const scadenze: ScadenzaUrgente[] = []
 
           if (impianto.manutenzione) {
             scadenze.push({
-              condominio: condominio.nome,
-              impianto: impianto.tipo,
-              descrizione: impianto.nome,
+              condominio: nomeCondominio(condominio),
+              impianto: impianto.tipo ?? "Impianto",
+              descrizione: impianto.nome ?? "",
               tipo: "Manutenzione",
               data: impianto.manutenzione,
               giorni: giorniAllaScadenza(impianto.manutenzione),
-              email: condominio.email_notifiche,
+              email: condominio.email_notifiche ?? "",
             })
           }
 
           if (impianto.contratto_manutenzione) {
             scadenze.push({
-              condominio: condominio.nome,
-              impianto: impianto.tipo,
-              descrizione: impianto.nome,
+              condominio: nomeCondominio(condominio),
+              impianto: impianto.tipo ?? "Impianto",
+              descrizione: impianto.nome ?? "",
               tipo: "Contratto manutenzione",
               data: impianto.contratto_manutenzione,
               giorni: giorniAllaScadenza(impianto.contratto_manutenzione),
-              email: condominio.email_notifiche,
+              email: condominio.email_notifiche ?? "",
             })
           }
 
           return scadenze
         })
       )
-      .filter((s: any) => s.giorni >= 0 && s.giorni <= 30 && s.email) ?? []
+      .filter(
+        (s: ScadenzaUrgente) => s.giorni >= 0 && s.giorni <= 30 && s.email
+      ) ?? []
 
   if (scadenzeUrgenti.length === 0) {
     return new Response("Nessuna scadenza urgente da notificare")
   }
 
-  const gruppiPerEmail = scadenzeUrgenti.reduce((acc: any, scadenza: any) => {
+  const gruppiPerEmail = scadenzeUrgenti.reduce<
+    Record<string, ScadenzaUrgente[]>
+  >((acc, scadenza) => {
     acc[scadenza.email] = acc[scadenza.email] || []
     acc[scadenza.email].push(scadenza)
     return acc
@@ -86,7 +118,7 @@ Deno.serve(async () => {
   for (const email of Object.keys(gruppiPerEmail)) {
     const righe = gruppiPerEmail[email]
       .map(
-        (s: any) => `
+        (s) => `
           <li>
             <strong>${s.condominio}</strong> — ${s.impianto}<br/>
             ${s.tipo}: ${s.data} (${s.giorni} giorni)

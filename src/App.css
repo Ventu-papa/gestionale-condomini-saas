@@ -98,6 +98,13 @@ button:active {
   transform: translateY(0);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
 .secondary,
 .secondary.small {
   background: rgba(30, 41, 59, 0.9);
@@ -143,8 +150,9 @@ input,
 select,
 textarea {
   width: 100%;
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  min-height: 50px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
   background: rgba(2, 6, 23, 0.56);
   color: #f8fafc;
   padding: 13px 15px;
@@ -164,7 +172,11 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #64748b;
+  color: #94a3b8;
+}
+
+input[type="date"] {
+  color-scheme: dark;
 }
 
 input:focus,
@@ -410,6 +422,12 @@ option {
   color: #cbd5e1;
   font-size: 18px;
   line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.login-access-note {
+  color: #fed7aa;
+  line-height: 1.5;
   margin-bottom: 30px;
 }
 
@@ -523,8 +541,39 @@ option {
 .impianti-form {
   margin-top: 22px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  align-items: end;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.inline-field {
+  margin: 0;
+  gap: 8px;
+  min-width: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.inline-field span {
+  color: #94a3b8;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.inline-field input,
+.inline-field select {
+  min-height: 48px;
+  min-width: 0;
+}
+
+.impianti-submit {
+  grid-column: 1 / -1;
+  min-height: 52px;
+  justify-self: end;
 }
 
 .impianti-list,
@@ -538,14 +587,34 @@ option {
 }
 
 .impianto-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 1.2fr 1.4fr 1fr 1fr auto auto;
+  grid-template-columns: 1.1fr 1.2fr repeat(4, minmax(120px, 1fr)) auto auto;
   gap: 12px;
   align-items: center;
-  padding: 18px;
+  padding: 20px 18px 20px 22px;
   border-radius: 22px;
   background: rgba(15, 23, 42, 0.62);
   border: 1px solid rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.impianto-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.impianto-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(249, 115, 22, 0.34);
 }
 
 .impianto-row span,
@@ -559,16 +628,28 @@ option {
   background: rgba(239, 68, 68, 0.11);
 }
 
+.impianto-row.rosso::before {
+  background: #ef4444;
+}
+
 .impianto-row.arancione,
 .scadenza-row.arancione {
   border-color: rgba(249, 115, 22, 0.58);
   background: rgba(249, 115, 22, 0.11);
 }
 
+.impianto-row.arancione::before {
+  background: #f97316;
+}
+
 .impianto-row.verde,
 .scadenza-row.verde {
   border-color: rgba(34, 197, 94, 0.55);
   background: rgba(34, 197, 94, 0.1);
+}
+
+.impianto-row.verde::before {
+  background: #22c55e;
 }
 
 /* ===============================
@@ -1862,8 +1943,36 @@ option {
   width: 100%;
 }
 
+.integration-actions {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 260px);
+}
+
 .integration-button {
   width: 100%;
+}
+
+.dashboard-core-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-operational-grid-single {
+  grid-template-columns: 1fr;
+}
+
+.deadline-mini-row.rosso {
+  border-color: rgba(239, 68, 68, 0.48);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.deadline-mini-row.arancione {
+  border-color: rgba(249, 115, 22, 0.48);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.deadline-mini-row.verde {
+  border-color: rgba(34, 197, 94, 0.38);
 }
 .mobile-menu-button {
   display: none;
@@ -2400,6 +2509,93 @@ option {
   min-height: 48px;
 }  
 
+/* =========================================================
+   FORNITORI
+========================================================= */
+
+.fornitori-page {
+  max-width: 1280px;
+}
+
+.fornitori-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.fornitori-form-card {
+  min-height: unset;
+  cursor: default;
+}
+
+.fornitori-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.fornitori-form button {
+  min-height: 48px;
+}
+
+.fornitori-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.fornitore-card {
+  padding: 22px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.72));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.2);
+}
+
+.fornitore-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.fornitore-card-header h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+}
+
+.fornitore-card-header > strong {
+  width: fit-content;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.14);
+  color: #fdba74;
+  font-size: 12px;
+}
+
+.fornitore-details {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.fornitore-details span {
+  color: #cbd5e1;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .fornitori-form,
+  .dashboard-core-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .documento-ocr-badge {
   padding: 6px 9px;
   border-radius: 999px;
@@ -2448,4 +2644,676 @@ option {
   margin: 6px 0 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.68);
+}
+
+.documento-ocr-details {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.documento-ocr-details summary {
+  cursor: pointer;
+  color: #ff9f2f;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.documento-ocr-details p {
+  margin: 10px 0 0;
+  max-height: 150px;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: pre-wrap;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 26px;
+}
+
+.settings-card {
+  min-height: 260px;
+}
+
+.settings-card h2 {
+  margin: 8px 0;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.settings-note {
+  display: block;
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.5;
+}
+
+.subscription-plan-card {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 132, 0, 0.08);
+  border: 1px solid rgba(255, 132, 0, 0.18);
+}
+
+.subscription-plan-card strong {
+  display: block;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.subscription-plan-card span {
+  color: rgba(255, 255, 255, 0.58);
+}
+/* =========================================================
+   LIGHT MODE — CLEAN MINIMAL
+========================================================= */
+
+.theme-light,
+.theme-light .app-shell,
+.theme-light .saas-content,
+.theme-light .page-view {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* =========================
+   TESTI
+========================= */
+
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light p,
+.theme-light span,
+.theme-light small,
+.theme-light strong,
+.theme-light label,
+.theme-light .subtitle {
+  color: #000000 !important;
+}
+
+.theme-light .eyebrow {
+  color: #ea580c !important;
+}
+
+/* =========================
+   CARD
+========================= */
+
+.theme-light .dashboard-card,
+.theme-light .detail-card,
+.theme-light .stat-card,
+.theme-light .condominio-card,
+.theme-light .documento-premium-card,
+.theme-light .settings-card,
+.theme-light .integration-card,
+.theme-light .global-search-card,
+.theme-light .notification-card,
+.theme-light .dashboard-hero,
+.theme-light .documentale-hero,
+.theme-light .premium-modal-card,
+.theme-light .premium-confirm-card,
+.theme-light .ticket-row,
+.theme-light .timeline-row,
+.theme-light .documento-row,
+.theme-light .scadenza-row,
+.theme-light .communication-row,
+.theme-light .impianto-row,
+.theme-light .empty-state {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.theme-light .sidebar {
+  background: #ffffff !important;
+}
+
+.theme-light .sidebar-item {
+  color: #000000 !important;
+  background: transparent !important;
+}
+
+.theme-light .sidebar-item.active {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  border-radius: 14px;
+}
+
+/* =========================
+   INPUT
+========================= */
+
+.theme-light input,
+.theme-light textarea,
+.theme-light select,
+.theme-light .search-input {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #ea580c !important;
+  box-shadow: none !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #7c2d12 !important;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+.theme-light .primary,
+.theme-light .premium-save-button {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+.theme-light .secondary {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #ea580c !important;
+}
+
+.theme-light .danger-button {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+/* =========================
+   BADGE
+========================= */
+
+.theme-light .documento-badge,
+.theme-light .integration-status-badge,
+.theme-light .communication-managed-badge {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+/* =========================
+   MODAL
+========================= */
+
+.theme-light .premium-modal {
+  background: rgba(255,255,255,0.7) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* =========================
+   ELIMINA QUALSIASI GRADIENTE
+========================= */
+
+.theme-light *,
+.theme-light *::before,
+.theme-light *::after {
+  background-image: none !important;
+}
+
+/* =========================================================
+   SETTINGS PAGE
+========================================================= */
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+  margin-top: 30px;
+}
+
+.settings-card {
+  padding: 28px;
+  border-radius: 24px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.settings-note {
+  display: block;
+  margin-top: 18px;
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+.settings-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.settings-status-badge {
+  background: #ea580c;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.subscription-plan-card {
+  margin-top: 22px;
+  padding: 20px;
+  background: rgba(234, 88, 12, 0.08);
+  border-radius: 18px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.subscription-plan-card strong {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.subscription-plan-card span {
+  opacity: 0.7;
+}
+
+.subscription-badge {
+  background: #ea580c;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* =========================================================
+   COMMUNICATION ENGINE UI
+========================================================= */
+
+.communication-row {
+  padding: 24px;
+  border-radius: 24px;
+  margin-bottom: 18px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  transition: all 0.2s ease;
+}
+
+.communication-row:hover {
+  transform: translateY(-2px);
+}
+
+.communication-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+
+.communication-channel {
+  padding: 8px 14px;
+  border-radius: 999px;
+
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.communication-channel.email {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+
+.communication-channel.pec {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+}
+
+.communication-channel.whatsapp {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.communication-channel.phone {
+  background: rgba(249, 115, 22, 0.12);
+  color: #f97316;
+}
+
+.communication-priority {
+  padding: 8px 14px;
+  border-radius: 999px;
+
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.communication-priority.alta {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.communication-priority.media {
+  background: rgba(234, 88, 12, 0.12);
+  color: #ea580c;
+}
+
+.communication-priority.bassa {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.communication-title {
+  font-size: 1.15rem;
+  margin-top: 6px;
+}
+
+.communication-body {
+  line-height: 1.7;
+  opacity: 0.82;
+  margin-top: 12px;
+}
+
+.communication-managed-badge {
+  display: inline-flex;
+  align-items: center;
+
+  margin-top: 12px;
+
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+
+  padding: 8px 14px;
+  border-radius: 999px;
+
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.communication-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  margin-top: 18px;
+}
+
+/* =========================================================
+   LIGHT MODE - HIGH CONTRAST
+========================================================= */
+
+.theme-light {
+  --light-bg: #ffffff;
+  --light-text: #000000;
+  --light-accent: #ea580c;
+  --light-accent-strong: #9a3412;
+  --light-success: #047857;
+  --light-danger: #b91c1c;
+  --light-info: #1d4ed8;
+  background: var(--light-bg) !important;
+  color: var(--light-text) !important;
+}
+
+.theme-light.app-shell,
+.theme-light .saas-content,
+.theme-light .page-view,
+.theme-light .dashboard-premium {
+  background: var(--light-bg) !important;
+  color: var(--light-text) !important;
+}
+
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light p,
+.theme-light span,
+.theme-light small,
+.theme-light strong,
+.theme-light label,
+.theme-light .subtitle,
+.theme-light .settings-note {
+  color: var(--light-text) !important;
+  opacity: 1 !important;
+}
+
+.theme-light .eyebrow,
+.theme-light .panel-header span,
+.theme-light .analytics-card span,
+.theme-light .dashboard-card span,
+.theme-light .integration-panel span {
+  color: var(--light-accent-strong) !important;
+}
+
+.theme-light .dashboard-card,
+.theme-light .detail-card,
+.theme-light .stat-card,
+.theme-light .condominio-card,
+.theme-light .documento-premium-card,
+.theme-light .settings-card,
+.theme-light .integration-card,
+.theme-light .fornitore-card,
+.theme-light .integration-panel,
+.theme-light .global-search-panel,
+.theme-light .dashboard-panel,
+.theme-light .notification-row,
+.theme-light .documentale-hero,
+.theme-light .premium-modal-card,
+.theme-light .premium-confirm-card,
+.theme-light .ticket-row,
+.theme-light .timeline-row,
+.theme-light .documento-row,
+.theme-light .scadenza-row,
+.theme-light .communication-row,
+.theme-light .impianto-row,
+.theme-light .empty-state,
+.theme-light .premium-import-card,
+.theme-light .premium-import-report,
+.theme-light .report-section {
+  background: #ffffff !important;
+  color: var(--light-text) !important;
+  border: 1.5px solid rgba(234, 88, 12, 0.42) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light .dashboard-card:hover,
+.theme-light .detail-card:hover,
+.theme-light .condominio-card:hover,
+.theme-light .analytics-card:hover,
+.theme-light .gestionale-card:hover,
+.theme-light .secondary:hover,
+.theme-light .sidebar-item:hover {
+  background: #fff7ed !important;
+  border-color: var(--light-accent) !important;
+  color: var(--light-text) !important;
+  box-shadow: 0 18px 42px rgba(234, 88, 12, 0.18) !important;
+}
+
+.theme-light .sidebar {
+  background: #ffffff !important;
+  border-right: 2px solid var(--light-accent) !important;
+}
+
+.theme-light .sidebar-logo,
+.theme-light .settings-status-badge,
+.theme-light .subscription-badge {
+  background: var(--light-accent) !important;
+  color: #ffffff !important;
+}
+
+.theme-light .sidebar-item {
+  color: var(--light-text) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+}
+
+.theme-light .sidebar-item.active {
+  background: var(--light-accent) !important;
+  color: #ffffff !important;
+  border-color: var(--light-accent) !important;
+}
+
+.theme-light .sidebar-item.active:hover {
+  background: var(--light-accent-strong) !important;
+  color: #ffffff !important;
+}
+
+.theme-light input,
+.theme-light textarea,
+.theme-light select,
+.theme-light .search-input,
+.theme-light .onboarding-input {
+  background: #ffffff !important;
+  color: var(--light-text) !important;
+  border: 2px solid var(--light-accent) !important;
+  box-shadow: none !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #7c2d12 !important;
+  opacity: 1;
+}
+
+.theme-light input:hover,
+.theme-light textarea:hover,
+.theme-light select:hover {
+  border-color: var(--light-accent-strong) !important;
+}
+
+.theme-light input:focus,
+.theme-light textarea:focus,
+.theme-light select:focus {
+  border-color: #000000 !important;
+  box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.22) !important;
+}
+
+.theme-light button,
+.theme-light .primary,
+.theme-light .premium-save-button {
+  background: var(--light-accent) !important;
+  color: #ffffff !important;
+  border: 2px solid var(--light-accent) !important;
+  box-shadow: 0 14px 30px rgba(234, 88, 12, 0.22) !important;
+}
+
+.theme-light button:hover,
+.theme-light .primary:hover,
+.theme-light .premium-save-button:hover {
+  background: var(--light-accent-strong) !important;
+  border-color: var(--light-accent-strong) !important;
+  color: #ffffff !important;
+}
+
+.theme-light .secondary,
+.theme-light .secondary.small,
+.theme-light .sidebar-profile button {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+.theme-light .secondary:hover,
+.theme-light .secondary.small:hover,
+.theme-light .sidebar-profile button:hover {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+.theme-light .danger-button,
+.theme-light .danger-button.small {
+  background: var(--light-danger) !important;
+  color: #ffffff !important;
+  border: 2px solid var(--light-danger) !important;
+}
+
+.theme-light .danger-button:hover,
+.theme-light .danger-button.small:hover {
+  background: #7f1d1d !important;
+  border-color: #7f1d1d !important;
+}
+
+.theme-light .communication-channel.email,
+.theme-light .communication-priority.bassa,
+.theme-light .documento-ocr-badge.processing {
+  background: #eff6ff !important;
+  color: var(--light-info) !important;
+  border: 1px solid var(--light-info) !important;
+}
+
+.theme-light .communication-channel.whatsapp,
+.theme-light .communication-managed-badge,
+.theme-light .integration-status-badge.connected,
+.theme-light .documento-ocr-badge.completed {
+  background: #ecfdf5 !important;
+  color: var(--light-success) !important;
+  border: 1px solid var(--light-success) !important;
+}
+
+.theme-light .communication-priority.alta,
+.theme-light .integration-status-badge.disconnected,
+.theme-light .documento-ocr-badge.failed {
+  background: #fef2f2 !important;
+  color: var(--light-danger) !important;
+  border: 1px solid var(--light-danger) !important;
+}
+
+.theme-light .communication-channel.pec {
+  background: #faf5ff !important;
+  color: #7e22ce !important;
+  border: 1px solid #7e22ce !important;
+}
+
+.theme-light .communication-channel.phone,
+.theme-light .communication-priority.media,
+.theme-light .documento-badge,
+.theme-light .gestionale-badge,
+.theme-light .documento-ocr-badge.pending {
+  background: #fff7ed !important;
+  color: var(--light-accent-strong) !important;
+  border: 1px solid var(--light-accent) !important;
+}
+
+.theme-light .premium-modal {
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+.theme-light .impianti-form {
+  background: #fff7ed !important;
+  border: 2px solid var(--light-accent) !important;
+}
+
+.theme-light .inline-field span {
+  color: var(--light-accent-strong) !important;
+}
+
+.theme-light input[type="date"] {
+  color-scheme: light;
 }

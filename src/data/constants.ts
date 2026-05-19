@@ -9,10 +9,18 @@ export const modules: {
   status: string
 }[] = [
   {
-    title: "Condomìni",
+    title: "Condomini",
     page: "condomini",
-    description: "Anagrafica fabbricati, indirizzi, unità, impianti e informazioni operative.",
+    description:
+      "Anagrafica fabbricati, indirizzi, unita', impianti e informazioni operative.",
     status: "Primo modulo",
+  },
+  {
+    title: "Fornitori",
+    page: "fornitori",
+    description:
+      "Anagrafiche fornitori, mansioni e collegamento ai condomini seguiti.",
+    status: "Operativo",
   },
   {
     title: "Scadenze",
@@ -23,26 +31,29 @@ export const modules: {
   {
     title: "Timeline globale",
     page: "timelineGlobale",
-    description: "Tutte le comunicazioni operative di tutti i condomìni.",
+    description: "Tutte le comunicazioni operative di tutti i condomini.",
     status: "Memoria studio",
   },
   {
     title: "Timeline",
     page: "timeline",
-    description: "Storico centralizzato di email, WhatsApp, chiamate, ticket e documenti.",
+    description:
+      "Storico centralizzato di email, WhatsApp, chiamate, ticket e documenti.",
     status: "Cuore del sistema",
   },
   {
     title: "Documenti",
     page: "documenti",
-    description: "Archivio digitale per PDF, immagini, contratti, verbali e rapportini.",
+    description:
+      "Archivio digitale per PDF, immagini, contratti, verbali e rapportini.",
     status: "Prossimo step",
   },
   {
     title: "Ticket",
     page: "ticket",
-    description: "Gestione richieste, guasti, interventi e attività operative dello studio.",
-    status: "Da costruire",
+    description:
+      "Gestione richieste, guasti, interventi e attivita' operative dello studio.",
+    status: "Operativo",
   },
 ]
 

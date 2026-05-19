@@ -9,14 +9,16 @@ type SidebarProps = {
   onCloseMobile?: () => void
 }
 
-const items = [
+const items: { id: Page; label: string }[] = [
   { id: "home", label: "Dashboard" },
-  { id: "condomini", label: "Condomìni" },
+  { id: "condomini", label: "Condomini" },
+  { id: "fornitori", label: "Fornitori" },
   { id: "ticket", label: "Ticket" },
   { id: "documenti", label: "Documenti" },
   { id: "timelineGlobale", label: "Timeline" },
   { id: "scadenze", label: "Scadenze" },
-  { id: "integrazioni", label: "Integrazioni" },
+  { id: "comunicazioni", label: "Comunicazioni" },
+  { id: "impostazioni", label: "Impostazioni" },
 ]
 
 export default function Sidebar({
@@ -28,47 +30,42 @@ export default function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   return (
-   <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-    <button
-      className="sidebar-mobile-close"
-      onClick={onCloseMobile}
-    >
-      ×
-    </button>
-      {/* ===============================
-          BRAND SOFTWARE
-      =============================== */}
+    <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
+      <button
+        className="sidebar-mobile-close"
+        type="button"
+        onClick={onCloseMobile}
+        aria-label="Chiudi menu"
+      >
+        x
+      </button>
+
       <div className="sidebar-brand">
         <div className="sidebar-logo">GV</div>
 
         <div>
           <strong>Studio Ventura</strong>
-          <p>Operational Platform</p>
+          <p>Piattaforma operativa</p>
         </div>
       </div>
 
-      {/* ===============================
-          NAVIGAZIONE PRINCIPALE
-      =============================== */}
       <nav className="sidebar-nav">
         {items.map((item) => (
           <button
             key={item.id}
             className={`sidebar-item ${page === item.id ? "active" : ""}`}
-            onClick={() => setPage(item.id as Page)}
+            type="button"
+            onClick={() => setPage(item.id)}
           >
             {item.label}
           </button>
         ))}
       </nav>
 
-      {/* ===============================
-          PROFILO UTENTE + LOGOUT
-      =============================== */}
       <div className="sidebar-profile">
         <span>{userEmail}</span>
 
-        <button onClick={onLogout}>
+        <button type="button" onClick={onLogout}>
           Esci
         </button>
       </div>

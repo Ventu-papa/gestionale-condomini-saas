@@ -3,12 +3,14 @@
 export type Page =
   | "home"
   | "condomini"
+  | "fornitori"
   | "scadenze"
   | "timelineGlobale"
   | "timeline"
   | "documenti"
   | "ticket"
-  | "integrazioni"
+  | "comunicazioni"
+  | "impostazioni"
 
 export type TimelineEvent = {
   id: number
@@ -22,15 +24,23 @@ export type Impianto = {
   id: number
   tipo: string
   nome: string
-  manutenzione: string
-  contratto_manutenzione: string
+  manutenzione?: string
+  avviso_manutenzione?: string
+  contratto_manutenzione?: string
+  avviso_contratto_manutenzione?: string
 }
 
 export type Condominio = {
   id: number
-  nome: string
+  nome?: string
+  nome_condominio?: string
+  cod_fiscale?: string
   indirizzo: string
+  cap?: string
   comune: string
+  provincia?: string
+  dati_catastali?: string
+  email_notifiche?: string
   user_id?: string
   impianti?: Impianto[]
   timeline?: TimelineEvent[]
@@ -67,4 +77,17 @@ export type Ticket = {
   stato: "Aperto" | "In lavorazione" | "Chiuso"
   priorita: "Bassa" | "Media" | "Alta"
   data: string
+}
+
+export type Fornitore = {
+  id: number
+  user_id?: string
+  nome: string
+  cognome: string
+  partita_iva: string
+  telefono: string
+  iban: string
+  mansione: string
+  condominio_id?: number | null
+  created_at?: string
 }
