@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import type { User } from "@supabase/supabase-js"
 import * as XLSX from "xlsx"
@@ -111,8 +111,60 @@ type FornitoreForm = {
   condominio_id: number | ""
 }
 
+type ToastNotification = {
+  id: number
+  tipo: "success" | "error" | "warning" | "info"
+  titolo: string
+  messaggio: string
+}
+
 function creaIdLocale() {
   return Date.now()
+}
+
+function classificaNotificaDaMessaggio(message: string): ToastNotification["tipo"] {
+  const testo = message.toLowerCase()
+
+  if (
+    testo.includes("errore") ||
+    testo.includes("impossibile") ||
+    testo.includes("non riuscit") ||
+    testo.includes("failed") ||
+    testo.includes("error")
+  ) {
+    return "error"
+  }
+
+  if (
+    testo.includes("inserisci") ||
+    testo.includes("nessun") ||
+    testo.includes("non trovato") ||
+    testo.includes("gia") ||
+    testo.includes("già") ||
+    testo.includes("non ancora")
+  ) {
+    return "warning"
+  }
+
+  if (
+    testo.includes("correttamente") ||
+    testo.includes("salvato") ||
+    testo.includes("creato") ||
+    testo.includes("importat") ||
+    testo.includes("collegato") ||
+    testo.includes("scollegato")
+  ) {
+    return "success"
+  }
+
+  return "info"
+}
+
+function titoloNotifica(tipo: ToastNotification["tipo"]) {
+  if (tipo === "success") return "Operazione completata"
+  if (tipo === "error") return "Qualcosa non ha funzionato"
+  if (tipo === "warning") return "Attenzione"
+  return "Nota operativa"
 }
 
 function ticketGlobaleKey(ticket: Pick<TicketGlobale, "condominio_id" | "id">) {
@@ -275,6 +327,43 @@ function App() {
     message: "",
     onConfirm: null,
   })
+  const [notificheToast, setNotificheToast] = useState<ToastNotification[]>([])
+
+  const chiudiNotifica = useCallback((id: number) => {
+    setNotificheToast((prev) => prev.filter((notifica) => notifica.id !== id))
+  }, [])
+
+  const mostraNotifica = useCallback(
+    (
+      messaggio: unknown,
+      tipo?: ToastNotification["tipo"],
+      titolo?: string
+    ) => {
+      const testo =
+        typeof messaggio === "string"
+          ? messaggio
+          : messaggio instanceof Error
+            ? messaggio.message
+            : String(messaggio ?? "")
+      const tipoNotifica = tipo ?? classificaNotificaDaMessaggio(testo)
+      const id = Date.now() + Math.floor(Math.random() * 1000)
+
+      setNotificheToast((prev) => [
+        ...prev.slice(-3),
+        {
+          id,
+          tipo: tipoNotifica,
+          titolo: titolo ?? titoloNotifica(tipoNotifica),
+          messaggio: testo,
+        },
+      ])
+
+      window.setTimeout(() => {
+        chiudiNotifica(id)
+      }, 5200)
+    },
+    [chiudiNotifica]
+  )
 
   // ============================================================
   // STATO: DATI PRINCIPALI E FORM
@@ -345,6 +434,18 @@ function App() {
     data: "",
     note: "",
   })
+
+  useEffect(() => {
+    const alertNativo = window.alert
+
+    window.alert = (messaggio?: unknown) => {
+      mostraNotifica(messaggio)
+    }
+
+    return () => {
+      window.alert = alertNativo
+    }
+  }, [mostraNotifica])
 
   // ============================================================
   // EFFECT: AUTENTICAZIONE
@@ -534,6 +635,36 @@ function App() {
   // UI: LAYOUT E CONFERME
   // Funzioni di supporto usate da tutte le pagine autenticate.
   // ============================================================
+
+  function renderNotificheToast() {
+    if (notificheToast.length === 0) return null
+
+    return (
+      <div className="toast-stack" aria-live="polite" aria-atomic="false">
+        {notificheToast.map((notifica) => (
+          <div
+            className={`toast-notification ${notifica.tipo}`}
+            key={notifica.id}
+            role="status"
+          >
+            <div>
+              <strong>{notifica.titolo}</strong>
+              <p>{notifica.messaggio}</p>
+            </div>
+
+            <button
+              className="toast-close"
+              type="button"
+              aria-label="Chiudi notifica"
+              onClick={() => chiudiNotifica(notifica.id)}
+            >
+              x
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   // Apre il modal di conferma e registra la callback da eseguire su OK.
   function apriConferma(title: string, message: string, onConfirm: () => void) {
@@ -883,6 +1014,8 @@ function App() {
             </div>
           </div>
         )}
+
+        {renderNotificheToast()}
       </main>
     )
   }
@@ -2674,26 +2807,37 @@ const condominioTarget = condomini.find(
   // Login, loader onboarding e pagina di configurazione iniziale.
   // ============================================================
   if (!user) {
-    return <LoginPage form={loginForm} setForm={setLoginForm} />
+    return (
+      <>
+        <LoginPage form={loginForm} setForm={setLoginForm} />
+        {renderNotificheToast()}
+      </>
+    )
   }
 
   if (caricamentoOnboarding) {
     return (
-      <main className="onboarding-page">
-        <section className="onboarding-card">
-          <p className="eyebrow">Caricamento</p>
-          <h1>Preparazione studio...</h1>
-        </section>
-      </main>
+      <>
+        <main className="onboarding-page">
+          <section className="onboarding-card">
+            <p className="eyebrow">Caricamento</p>
+            <h1>Preparazione studio...</h1>
+          </section>
+        </main>
+        {renderNotificheToast()}
+      </>
     )
   }
 
   if (!onboardingCompletato) {
     return (
-      <OnboardingPage
-        onComplete={completaOnboarding}
-        onConnectGestionale={salvaCollegamentoGestionale}
-      />
+      <>
+        <OnboardingPage
+          onComplete={completaOnboarding}
+          onConnectGestionale={salvaCollegamentoGestionale}
+        />
+        {renderNotificheToast()}
+      </>
     )
   }
 

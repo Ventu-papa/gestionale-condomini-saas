@@ -42,6 +42,8 @@ function LoginPage({ form, setForm }: LoginPageProps) {
         <div className="login-form">
           <input
             placeholder="Email"
+            type="email"
+            autoComplete="email"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
@@ -49,6 +51,7 @@ function LoginPage({ form, setForm }: LoginPageProps) {
           <input
             placeholder="Password"
             type="password"
+            autoComplete="current-password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             onKeyDown={(e) => {
